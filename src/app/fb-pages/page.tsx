@@ -1,0 +1,99 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/SubmitButton";
+import { createFbPage } from "./actions";
+import { STATUS_LABEL, STATUS_TONE, options } from "@/lib/labels";
+import { formatInt } from "@/lib/format";
+
+export const dynamic = "force-dynamic";
+
+export default async function FbPagesPage() {
+  const pages = await prisma.fbPage.findMany({
+    orderBy: { createdAt: "asc" },
+    include: { _count: { select: { campaigns: true } } },
+  });
+
+  return (
+    <>
+      <PageHeader
+        title="ເພຈ Facebook"
+        description="ເພຈທີ່ໃຊ້ຍິງໂຄສະນາ — ໃຊ້ແຍກວ່າແຄມເປນໃດຍິງຈາກເພຈໃດ"
+      />
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Card>
+          <CardHeader title="ລາຍການເພຈ" subtitle={`ທັງໝົດ ${pages.length} ເພຈ`} />
+          {pages.length === 0 ? (
+            <EmptyState title="ຍັງບໍ່ມີເພຈ" hint="ເພີ່ມເພຈຢູ່ຟອມທາງຂວາ" />
+          ) : (
+            <div className="table-wrap">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>ຊື່ເພຈ</th>
+                    <th>Page ID</th>
+                    <th>ໝວດ</th>
+                    <th className="num">ແຄມເປນ</th>
+                    <th>ສະຖານະ</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pages.map((p) => (
+                    <tr key={p.id}>
+                      <td className="font-medium">{p.name}</td>
+                      <td className="text-[var(--fg-muted)]">
+                        {p.fbPageId ?? "—"}
+                      </td>
+                      <td>{p.category ?? "—"}</td>
+                      <td className="num">{formatInt(p._count.campaigns)}</td>
+                      <td>
+                        <Badge tone={STATUS_TONE[p.status]}>
+                          {STATUS_LABEL[p.status]}
+                        </Badge>
+                      </td>
+                      <td className="num">
+                        <Link href={`/fb-pages/${p.id}`} className="btn btn-sm">
+                          ແກ້ໄຂ
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <Card className="h-fit">
+          <CardHeader title="ເພີ່ມເພຈໃໝ່" />
+          <form action={createFbPage} className="grid gap-4 p-4">
+            <Field label="ຊື່ເພຈ *">
+              <input name="name" required className="field" placeholder="Odien Maall" />
+            </Field>
+            <Field label="Facebook Page ID" hint="ວ່າງໄດ້ ຖ້າຍັງບໍ່ຕໍ່ API">
+              <input name="fbPageId" className="field" placeholder="100000000001" />
+            </Field>
+            <Field label="ໝວດໝູ່">
+              <input name="category" className="field" placeholder="ຮ້ານຄ້າ" />
+            </Field>
+            <Field label="ສະຖານະ">
+              <select name="status" defaultValue="ACTIVE" className="field">
+                {options(STATUS_LABEL).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="ໝາຍເຫດ">
+              <textarea name="note" rows={2} className="field" />
+            </Field>
+            <SubmitButton>ເພີ່ມເພຈ</SubmitButton>
+          </form>
+        </Card>
+      </div>
+    </>
+  );
+}

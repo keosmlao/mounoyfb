@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Insight" ADD COLUMN     "spendLak" DOUBLE PRECISION NOT NULL DEFAULT 0;

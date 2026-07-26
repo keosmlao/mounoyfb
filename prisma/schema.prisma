@@ -1,0 +1,334 @@
+// FBMONOY — ລະບົບຈັດການການຍິງໂຄສະນາ Facebook
+// ໂຄງສ້າງອອກແບບໃຫ້ປ້ອນມືໄດ້ 100% ແລະ ພ້ອມຮັບ sync ຈາກ Facebook Marketing API
+// ພາຍຫຼັງ (ທຸກຕາຕະລາງທີ່ map ກັບ FB ມີຊ່ອງ fb*Id ໄວ້ upsert).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum EntityStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum CampaignObjective {
+  MESSAGES // ຂໍ້ຄວາມ (Messenger)
+  TRAFFIC // ດຶງຄົນເຂົ້າເວັບ
+  ENGAGEMENT // ການມີສ່ວນຮ່ວມ
+  LEADS // ເກັບລາຍຊື່ລູກຄ້າ
+  SALES // ຍອດຂາຍ / Conversion
+  AWARENESS // ການຮັບຮູ້ແບຣນ
+  VIDEO_VIEWS // ຍອດເບິ່ງວິດີໂອ
+  APP_PROMOTION // ໂປຣໂມດແອັບ
+}
+
+enum InsightLevel {
+  ACCOUNT
+  CAMPAIGN
+  ADSET
+  AD
+}
+
+enum DataSource {
+  MANUAL // ປ້ອນມື
+  API // sync ຈາກ Facebook Marketing API
+}
+
+enum LeadStatus {
+  NEW // ໃໝ່
+  CONTACTED // ຕິດຕໍ່ແລ້ວ
+  QUALIFIED // ສົນໃຈຈິງ
+  WON // ປິດການຂາຍໄດ້
+  LOST // ຫຼຸດ
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// ບັນຊີໂຄສະນາ / ເພຈ / ສິນຄ້າ
+// ---------------------------------------------------------------------------
+
+/// ບັນຊີໂຄສະນາ (Ad Account) — 1 ບັນຊີ = 1 ກະເປົາເງິນທີ່ຕັດຄ່າໂຄສະນາ
+model AdAccount {
+  id          String       @id @default(cuid())
+  /// act_XXXXXXXXX ຈາກ Facebook (ວ່າງໄດ້ ຖ້າຍັງບໍ່ຕໍ່ API)
+  fbAccountId String?      @unique
+  name        String
+  /// ສະກຸນເງິນທີ່ Facebook ຕັດຈາກບັນຊີນີ້ — ປົກກະຕິ USD
+  currency    String       @default("USD")
+  timezone    String       @default("Asia/Vientiane")
+  spendCap    Float?
+  status      EntityStatus @default(ACTIVE)
+  note        String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  campaigns Campaign[]
+  insights  Insight[]
+
+  @@index([status])
+}
+
+/// ເພຈ Facebook ທີ່ໃຊ້ຍິງໂຄສະນາ
+model FbPage {
+  id        String       @id @default(cuid())
+  fbPageId  String?      @unique
+  name      String
+  category  String?
+  status    EntityStatus @default(ACTIVE)
+  note      String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  campaigns Campaign[]
+}
+
+/// ສິນຄ້າ / ອອບເຟີ ທີ່ຍິງໂຄສະນາ — ໃຊ້ຄິດກຳໄລ ແລະ ROAS
+model Product {
+  id        String   @id @default(cuid())
+  name      String
+  sku       String?  @unique
+  /// ລາຄາຂາຍ (ສະກຸນຫຼັກ = LAK)
+  price     Float    @default(0)
+  /// ຕົ້ນທຶນ (ສະກຸນຫຼັກ = LAK)
+  cost      Float    @default(0)
+  imageUrl  String?
+  active    Boolean  @default(true)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaigns Campaign[]
+  leads     Lead[]
+}
+
+// ---------------------------------------------------------------------------
+// ໂຄງສ້າງໂຄສະນາ: Campaign > AdSet > Ad
+// ---------------------------------------------------------------------------
+
+model Campaign {
+  id             String            @id @default(cuid())
+  fbCampaignId   String?           @unique
+  adAccountId    String
+  pageId         String?
+  productId      String?
+  name           String
+  objective      CampaignObjective @default(MESSAGES)
+  status         EntityStatus      @default(ACTIVE)
+  buyingType     String            @default("AUCTION")
+  dailyBudget    Float?
+  lifetimeBudget Float?
+  startDate      DateTime?         @db.Date
+  endDate        DateTime?         @db.Date
+  /// ຜູ້ຮັບຜິດຊອບ (media buyer) — ຂໍ້ຄວາມທຳມະດາ ເພາະຍັງບໍ່ມີລະບົບ login
+  ownerName      String?
+  note           String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  page      FbPage?   @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  adSets    AdSet[]
+  insights  Insight[]
+  leads     Lead[]
+
+  @@index([adAccountId])
+  @@index([status])
+  @@index([productId])
+}
+
+model AdSet {
+  id               String       @id @default(cuid())
+  fbAdSetId        String?      @unique
+  campaignId       String
+  name             String
+  status           EntityStatus @default(ACTIVE)
+  dailyBudget      Float?
+  lifetimeBudget   Float?
+  bidAmount        Float?
+  optimizationGoal String?
+  billingEvent     String?
+  /// ກຸ່ມເປົ້າໝາຍ (ອາຍຸ / ເພດ / ພື້ນທີ່ / ຄວາມສົນໃຈ) — ບັນທຶກເປັນຂໍ້ຄວາມ
+  audience         String?
+  placements       String?
+  startDate        DateTime?    @db.Date
+  endDate          DateTime?    @db.Date
+  note             String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  ads      Ad[]
+  insights Insight[]
+  leads    Lead[]
+
+  @@index([campaignId])
+  @@index([status])
+}
+
+model Ad {
+  id           String       @id @default(cuid())
+  fbAdId       String?      @unique
+  adSetId      String
+  name         String
+  status       EntityStatus @default(ACTIVE)
+  /// IMAGE / VIDEO / CAROUSEL / COLLECTION
+  creativeType String?
+  creativeUrl  String?
+  postUrl      String?
+  headline     String?
+  primaryText  String?
+  callToAction String?
+  note         String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  adSet    AdSet     @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  insights Insight[]
+  leads    Lead[]
+
+  @@index([adSetId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// ຜົນການຍິງລາຍວັນ (ຫົວໃຈຂອງລະບົບ)
+// ---------------------------------------------------------------------------
+
+/// ຜົນລາຍວັນ 1 ແຖວ = 1 ວັນ ຕໍ່ 1 ອົງປະກອບ (account / campaign / adset / ad)
+/// entityKey ຖືກສ້າງອັດຕະໂນມັດເປັນ "<LEVEL>:<id>" ເພື່ອກັນການປ້ອນຊ້ຳໃນວັນດຽວກັນ
+model Insight {
+  id          String       @id @default(cuid())
+  date        DateTime     @db.Date
+  level       InsightLevel @default(CAMPAIGN)
+  entityKey   String
+  adAccountId String
+  campaignId  String?
+  adSetId     String?
+  adId        String?
+
+  /// ສະກຸນເງິນຂອງຄ່າໃຊ້ຈ່າຍ (ຕາມບັນຊີໂຄສະນາ)
+  currency    String @default("USD")
+  /// ອັດຕາແລກປ່ຽນເປັນ LAK ໃນວັນນັ້ນ — spend * fxRateToLak = ຄ່າໃຊ້ຈ່າຍເປັນກີບ
+  fxRateToLak Float  @default(1)
+
+  spend       Float @default(0)
+  /// ຄ່າໃຊ້ຈ່າຍແປງເປັນກີບແລ້ວ (spend * fxRateToLak) — ຄິດໄວ້ຕອນບັນທຶກ ເພື່ອລວມຍອດໄດ້ໄວ
+  spendLak    Float @default(0)
+  impressions Int   @default(0)
+  reach       Int   @default(0)
+  clicks      Int   @default(0)
+  linkClicks  Int   @default(0)
+  /// ຈຳນວນຄົນທັກແຊັດ (ສຳຄັນທີ່ສຸດສຳລັບຕະຫຼາດລາວ)
+  messages    Int   @default(0)
+  leadsCount  Int   @default(0)
+  purchases   Int   @default(0)
+  /// ຍອດຂາຍທີ່ໄດ້ (LAK)
+  revenue     Float @default(0)
+  videoViews  Int   @default(0)
+
+  source    DataSource @default(MANUAL)
+  note      String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  campaign  Campaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  adSet     AdSet?    @relation(fields: [adSetId], references: [id], onDelete: Cascade)
+  ad        Ad?       @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@unique([date, entityKey])
+  @@index([date])
+  @@index([adAccountId, date])
+  @@index([campaignId, date])
+  @@index([source])
+}
+
+// ---------------------------------------------------------------------------
+// ລູກຄ້າທີ່ໄດ້ຈາກໂຄສະນາ
+// ---------------------------------------------------------------------------
+
+model Lead {
+  id         String     @id @default(cuid())
+  date       DateTime   @db.Date
+  name       String
+  phone      String?
+  fbName     String?
+  /// ຊ່ອງທາງ: Messenger / Comment / Lead Form / WhatsApp / ໂທ
+  channel    String?
+  status     LeadStatus @default(NEW)
+  /// ຍອດຊື້ (LAK) — ໃສ່ເມື່ອປິດການຂາຍໄດ້
+  amount     Float      @default(0)
+  assignee   String?
+  note       String?
+  campaignId String?
+  adSetId    String?
+  adId       String?
+  productId  String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSet    AdSet?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  ad       Ad?       @relation(fields: [adId], references: [id], onDelete: SetNull)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([status])
+  @@index([campaignId])
+}
+
+// ---------------------------------------------------------------------------
+// ຕັ້ງຄ່າ / ອັດຕາແລກປ່ຽນ / ບັນທຶກ sync
+// ---------------------------------------------------------------------------
+
+/// ອັດຕາແລກປ່ຽນລາຍວັນ → LAK
+model ExchangeRate {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  currency  String
+  rateToLak Float
+  createdAt DateTime @default(now())
+
+  @@unique([date, currency])
+  @@index([currency, date])
+}
+
+/// ຕັ້ງຄ່າທົ່ວໄປ (key/value) — ເກັບ token, ຄ່າ default ຕ່າງໆ
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+/// ບັນທຶກການ sync ຈາກ Facebook API
+model SyncLog {
+  id          String     @id @default(cuid())
+  startedAt   DateTime   @default(now())
+  finishedAt  DateTime?
+  status      SyncStatus @default(RUNNING)
+  level       String?
+  dateFrom    DateTime?  @db.Date
+  dateTo      DateTime?  @db.Date
+  recordCount Int        @default(0)
+  message     String?
+
+  @@index([startedAt])
+}

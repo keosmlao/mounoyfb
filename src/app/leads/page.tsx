@@ -1,0 +1,320 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
+import { SubmitButton } from "@/components/SubmitButton";
+import { StatTile } from "@/components/StatTile";
+import { DateRangeBar } from "@/components/DateRangeBar";
+import { createLead, setLeadStatus } from "./actions";
+import { formatDateLao, parseDate, resolveRange, todayStr } from "@/lib/date";
+import { formatInt, formatLak, formatPercent, safeDiv } from "@/lib/format";
+import {
+  LEAD_CHANNELS,
+  LEAD_STATUS_LABEL,
+  LEAD_STATUS_TONE,
+  options,
+} from "@/lib/labels";
+import type { LeadStatus } from "@/generated/prisma/enums";
+
+export const dynamic = "force-dynamic";
+
+type Search = {
+  from?: string;
+  to?: string;
+  preset?: string;
+  status?: string;
+  campaign?: string;
+};
+
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Search>;
+}) {
+  const sp = await searchParams;
+  const range = resolveRange(sp);
+
+  const where = {
+    date: { gte: parseDate(range.from), lte: parseDate(range.to) },
+    ...(sp.status ? { status: sp.status as LeadStatus } : {}),
+    ...(sp.campaign ? { campaignId: sp.campaign } : {}),
+  };
+
+  const [leads, campaigns, products, statusCounts] = await Promise.all([
+    prisma.lead.findMany({
+      where,
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      take: 200,
+      include: {
+        campaign: { select: { id: true, name: true } },
+        product: { select: { name: true } },
+      },
+    }),
+    prisma.campaign.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.product.findMany({
+      where: { active: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.lead.groupBy({
+      by: ["status"],
+      where: { date: { gte: parseDate(range.from), lte: parseDate(range.to) } },
+      _count: { _all: true },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const countOf = (s: LeadStatus) =>
+    statusCounts.find((r) => r.status === s)?._count._all ?? 0;
+  const total = statusCounts.reduce((n, r) => n + r._count._all, 0);
+  const won = countOf("WON");
+  const wonAmount = statusCounts.find((r) => r.status === "WON")?._sum.amount ?? 0;
+
+  return (
+    <>
+      <PageHeader
+        title="ລູກຄ້າຈາກໂຄສະນາ"
+        description="ຕິດຕາມຄົນທີ່ທັກເຂົ້າມາ ຈົນເຖິງປິດການຂາຍ"
+      />
+
+      <DateRangeBar
+        basePath="/leads"
+        range={range}
+        activePreset={sp.preset}
+        keep={{ status: sp.status, campaign: sp.campaign }}
+      />
+
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile label="ລູກຄ້າທັງໝົດ" value={formatInt(total)} hint="ໃນຊ່ວງທີ່ເລືອກ" />
+        <StatTile
+          label="ຍັງບໍ່ໄດ້ຕິດຕໍ່"
+          value={formatInt(countOf("NEW"))}
+          hint="ຕ້ອງຕິດຕາມດ່ວນ"
+        />
+        <StatTile
+          label="ປິດການຂາຍໄດ້"
+          value={formatInt(won)}
+          hint={`ອັດຕາປິດ ${formatPercent(safeDiv(won, total), 1)}`}
+        />
+        <StatTile label="ຍອດຂາຍລວມ" value={formatLak(wonAmount)} hint="ຈາກລູກຄ້າທີ່ປິດແລ້ວ" />
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-5">
+          <Card>
+            <form
+              method="get"
+              action="/leads"
+              className="flex flex-wrap items-end gap-3 p-3"
+            >
+              <input type="hidden" name="from" value={range.from} />
+              <input type="hidden" name="to" value={range.to} />
+              <div>
+                <label className="label">ສະຖານະ</label>
+                <select name="status" defaultValue={sp.status ?? ""} className="field">
+                  <option value="">ທັງໝົດ</option>
+                  {options(LEAD_STATUS_LABEL).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">ແຄມເປນ</label>
+                <select
+                  name="campaign"
+                  defaultValue={sp.campaign ?? ""}
+                  className="field"
+                >
+                  <option value="">ທັງໝົດ</option>
+                  {campaigns.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button type="submit" className="btn">
+                ກັ່ນຕອງ
+              </button>
+              {sp.status || sp.campaign ? (
+                <Link href="/leads" className="btn btn-sm">
+                  ລ້າງ
+                </Link>
+              ) : null}
+            </form>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="ລາຍຊື່ລູກຄ້າ"
+              subtitle={`ສະແດງ ${leads.length} ລາຍການ (ສູງສຸດ 200)`}
+            />
+            {leads.length === 0 ? (
+              <EmptyState
+                title="ບໍ່ພົບລູກຄ້າ"
+                hint="ເພີ່ມລູກຄ້າຢູ່ຟອມທາງຂວາ ຫຼື ຂະຫຍາຍຊ່ວງວັນ"
+              />
+            ) : (
+              <div className="table-wrap max-h-[36rem] overflow-y-auto">
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>ວັນທີ່</th>
+                      <th>ຊື່</th>
+                      <th>ເບີໂທ</th>
+                      <th>ຊ່ອງທາງ</th>
+                      <th>ແຄມເປນ</th>
+                      <th className="num">ຍອດຊື້</th>
+                      <th>ສະຖານະ</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leads.map((lead) => {
+                      const changeStatus = setLeadStatus.bind(null, lead.id);
+                      return (
+                        <tr key={lead.id}>
+                          <td className="whitespace-nowrap">
+                            {formatDateLao(lead.date)}
+                          </td>
+                          <td className="font-medium">{lead.name}</td>
+                          <td className="tnum whitespace-nowrap">
+                            {lead.phone ?? "—"}
+                          </td>
+                          <td className="text-xs">{lead.channel ?? "—"}</td>
+                          <td className="max-w-44 truncate text-xs">
+                            {lead.campaign ? (
+                              <Link
+                                href={`/campaigns/${lead.campaign.id}`}
+                                className="link"
+                              >
+                                {lead.campaign.name}
+                              </Link>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td className="num">
+                            {lead.amount ? formatLak(lead.amount) : "—"}
+                          </td>
+                          <td>
+                            <form action={changeStatus} className="flex gap-1">
+                              <select
+                                name="status"
+                                defaultValue={lead.status}
+                                className="field !py-1 !text-xs"
+                              >
+                                {options(LEAD_STATUS_LABEL).map((o) => (
+                                  <option key={o.value} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button type="submit" className="btn btn-sm">
+                                ✓
+                              </button>
+                            </form>
+                            <div className="mt-1">
+                              <Badge tone={LEAD_STATUS_TONE[lead.status]}>
+                                {LEAD_STATUS_LABEL[lead.status]}
+                              </Badge>
+                            </div>
+                          </td>
+                          <td className="num">
+                            <Link href={`/leads/${lead.id}`} className="btn btn-sm">
+                              ແກ້ໄຂ
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+
+        <Card className="h-fit">
+          <CardHeader title="ເພີ່ມລູກຄ້າ" />
+          <form action={createLead} className="grid gap-4 p-4">
+            <Field label="ວັນທີ່ *">
+              <input
+                name="date"
+                type="date"
+                required
+                defaultValue={todayStr()}
+                className="field"
+              />
+            </Field>
+            <Field label="ຊື່ລູກຄ້າ *">
+              <input name="name" required className="field" />
+            </Field>
+            <Field label="ເບີໂທ">
+              <input name="phone" className="field" placeholder="020 xx xxx xxx" />
+            </Field>
+            <Field label="ຊື່ໃນ Facebook">
+              <input name="fbName" className="field" />
+            </Field>
+            <Field label="ຊ່ອງທາງ">
+              <select name="channel" defaultValue="Messenger" className="field">
+                {LEAD_CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="ແຄມເປນທີ່ມາ">
+              <select name="campaignId" defaultValue="" className="field">
+                <option value="">— ບໍ່ລະບຸ —</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="ສິນຄ້າທີ່ສົນໃຈ">
+              <select name="productId" defaultValue="" className="field">
+                <option value="">— ບໍ່ລະບຸ —</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="ສະຖານະ">
+              <select name="status" defaultValue="NEW" className="field">
+                {options(LEAD_STATUS_LABEL).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="ຍອດຊື້ (ກີບ)" hint="ໃສ່ເມື່ອປິດການຂາຍໄດ້">
+              <input
+                name="amount"
+                type="number"
+                min="0"
+                step="1000"
+                defaultValue={0}
+                className="field"
+              />
+            </Field>
+            <Field label="ຜູ້ຮັບຜິດຊອບ">
+              <input name="assignee" className="field" />
+            </Field>
+            <SubmitButton>ເພີ່ມລູກຄ້າ</SubmitButton>
+          </form>
+        </Card>
+      </div>
+    </>
+  );
+}

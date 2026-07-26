@@ -1,36 +1,160 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FBMONOY — ລະບົບຈັດການການຍິງໂຄສະນາ Facebook
 
-## Getting Started
+ຈັດການແຄມເປນ, ບັນທຶກຄ່າໂຄສະນາ ແລະ ຜົນລາຍວັນ, ຕິດຕາມລູກຄ້າທີ່ທັກເຂົ້າມາ
+ແລະ ວັດຜົນເປັນເງິນກີບ (ROAS / ກຳໄລ / ຄ່າຕໍ່ 1 ຄົນທັກ).
 
-First, run the development server:
+ໃຊ້ງານໄດ້ເຕັມທີ່ດ້ວຍການປ້ອນມື — ບໍ່ຕ້ອງມີ Facebook API. ເມື່ອພ້ອມແລ້ວ
+ຄ່ອຍໃສ່ access token ເພື່ອດຶງຂໍ້ມູນອັດຕະໂນມັດ.
+
+## ໜ້າຈໍໃນລະບົບ
+
+| ໜ້າ | ໃຊ້ເຮັດຫຍັງ |
+|---|---|
+| `/` ໜ້າຫຼັກ | ກຳໄລສຸດທິ, ການແຈ້ງເຕືອນດ່ວນ, ROAS, ຄ່າຕໍ່ຄົນທັກ, ກຣາຟຄ່າໂຄສະນາທຽບຍອດຂາຍ, ແຄມເປນທີ່ຂາດທຶນ |
+| `/alerts` | ການແຈ້ງເຕືອນ 8 ແບບ — ໃຊ້ເກີນງົບ, ງົບໃກ້ໝົດ, ບັນຊີເຖິງເພດານ, ROAS ຕ່ຳ, ຄ່າຕໍ່ຄົນທັກສູງ, ຍັງບໍ່ໄດ້ບັນທຶກຜົນ, ແຄມເປນໃກ້ຈົບ, ລູກຄ້າຄ້າງ |
+| `/campaigns` | ລາຍການແຄມເປນພ້ອມຜົນການຍິງຕາມຊ່ວງວັນ, ກັ່ນຕອງຕາມບັນຊີ/ສະຖານະ |
+| `/campaigns/[id]` | ລາຍລະອຽດ + ຊຸດໂຄສະນາ (ad set) + ຜົນລາຍວັນຂອງແຄມເປນນັ້ນ |
+| `/ad-sets/[id]` | ຈັດການຊິ້ນໂຄສະນາ (ad) ແລະ ກຸ່ມເປົ້າໝາຍ |
+| `/insights` | **ຫົວໃຈຂອງລະບົບ** — ຕາຕະລາງປ້ອນຜົນລາຍວັນຂອງທຸກແຄມເປນພ້ອມກັນ |
+| `/leads` | ລູກຄ້າທີ່ໄດ້ຈາກໂຄສະນາ ຈົນເຖິງປິດການຂາຍ |
+| `/reports` | ສະຫຼຸບຕາມແຄມເປນ / ບັນຊີ / ສິນຄ້າ / ເປົ້າໝາຍ / ເພຈ / ວັນ + ດາວໂຫຼດ CSV |
+| `/ad-accounts`, `/fb-pages`, `/products` | ຂໍ້ມູນຫຼັກ |
+| `/settings` | ອັດຕາແລກປ່ຽນ, ເກນການແຈ້ງເຕືອນ, Facebook token, ດຶງຂໍ້ມູນຈາກ API, ປະຫວັດ sync |
+
+## ຕິດຕັ້ງ
+
+ຕ້ອງມີ Node 20+ ແລະ PostgreSQL ແລ່ນຢູ່.
 
 ```bash
+# 1. ສ້າງຖານຂໍ້ມູນ
+createdb fbmonoy
+
+# 2. ຕັ້ງຄ່າ
+cp .env.example .env      # ແກ້ DATABASE_URL ໃຫ້ຖືກກັບເຄື່ອງທ່ານ
+
+# 3. ຕິດຕັ້ງ + ສ້າງຕາຕະລາງ
+npm install
+npm run db:migrate
+
+# 4. (ທາງເລືອກ) ໃສ່ຂໍ້ມູນຕົວຢ່າງ 60 ວັນ ເພື່ອເບິ່ງໜ້າຈໍ
+npm run db:seed
+
+# 5. ແລ່ນ
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ເປີດ http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> `npm run db:seed` **ລຶບຂໍ້ມູນທັງໝົດ** ກ່ອນໃສ່ຕົວຢ່າງ — ຢ່າແລ່ນໃສ່ຖານຂໍ້ມູນຈິງ.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ຄຳສັ່ງ
 
-## Learn More
+| ຄຳສັ່ງ | ເຮັດຫຍັງ |
+|---|---|
+| `npm run dev` | ແລ່ນແບບພັດທະນາ |
+| `npm run build` / `npm start` | build ແລະ ແລ່ນແບບ production |
+| `npm run db:migrate` | ສ້າງ/ນຳໃຊ້ migration |
+| `npm run db:studio` | ເປີດ Prisma Studio ເບິ່ງຂໍ້ມູນ |
+| `npm run db:seed` | ໃສ່ຂໍ້ມູນຕົວຢ່າງ (ລຶບຂອງເກົ່າ) |
+| `npm run db:reset` | reset ຖານຂໍ້ມູນ + seed ໃໝ່ |
 
-To learn more about Next.js, take a look at the following resources:
+## ວິທີໃຊ້ປະຈຳວັນ
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. ຕັ້ງ **ບັນຊີໂຄສະນາ**, **ເພຈ**, **ສິນຄ້າ** ໜຶ່ງເທື່ອຕອນເລີ່ມ
+2. ສ້າງ **ແຄມເປນ** ແລ້ວຜູກກັບສິນຄ້າ (ຈຳເປັນ ຖ້າຢາກໃຫ້ຄິດ ROAS ໄດ້)
+3. ທຸກເຊົ້າໄປໜ້າ **ບັນທຶກຜົນລາຍວັນ** → ເລືອກວັນ → ໃສ່ອັດຕາແລກປ່ຽນ →
+   ພິມຄ່າໂຄສະນາ ແລະ ຜົນຂອງແຕ່ລະແຄມເປນ → ກົດ “ບັນທຶກທັງໝົດ”
+4. ລູກຄ້າທີ່ທັກເຂົ້າມາ ໃສ່ຢູ່ໜ້າ **ລູກຄ້າ** ແລ້ວອັບເດດສະຖານະຈົນປິດການຂາຍ
+5. ເບິ່ງຜົນຢູ່ໜ້າ **ໜ້າຫຼັກ** ແລະ **ລາຍງານ**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## ເລື່ອງເງິນ ແລະ ອັດຕາແລກປ່ຽນ
 
-## Deploy on Vercel
+Facebook ຕັດເງິນເປັນ USD ແຕ່ຍອດຂາຍເປັນກີບ. ລະບົບຈຶ່ງເກັບ 2 ຄ່າ:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `spend` — ຕາມສະກຸນຂອງບັນຊີໂຄສະນາ (ຄ່າທີ່ເຫັນໃນ Ads Manager)
+- `spendLak` — ແປງເປັນກີບແລ້ວ (`spend × ອັດຕາແລກປ່ຽນຂອງວັນນັ້ນ`)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**ຕົວເລກທີ່ເອົາມາລວມ ແລະ ປຽບທຽບທັງໝົດໃຊ້ `spendLak`** ຈຶ່ງທຽບກັບຍອດຂາຍໄດ້ຖືກຕ້ອງ
+ເຖິງວ່າອັດຕາແລກປ່ຽນຈະປ່ຽນທຸກວັນ. ອັດຕາທີ່ໃສ່ຕອນບັນທຶກຈະຖືກຈື່ໄວ້ໃນ
+`ExchangeRate` ແລະ ຖືກໃຊ້ເປັນຄ່າຕັ້ງຕົ້ນເທື່ອຕໍ່ໄປ.
+
+## ຕົວຊີ້ວັດຖືກຄິດແນວໃດ
+
+ຄິດຈາກ**ຍອດລວມ**ຂອງຊ່ວງທີ່ເລືອກສະເໝີ (ບໍ່ແມ່ນຄ່າສະເລ່ຍຂອງອັດຕາສ່ວນລາຍວັນ
+ຊຶ່ງຈະໃຫ້ຄຳຕອບຜິດ):
+
+- CTR = ຄລິກ ÷ ຄັ້ງທີ່ເຫັນ
+- CPC = ຄ່າໂຄສະນາ(ກີບ) ÷ ຄລິກ · CPM = ຄ່າໂຄສະນາ ÷ ຄັ້ງທີ່ເຫັນ × 1,000
+- ຄ່າຕໍ່ 1 ຄົນທັກ = ຄ່າໂຄສະນາ ÷ ຈຳນວນຄົນທັກ
+- ROAS = ຍອດຂາຍ ÷ ຄ່າໂຄສະນາ · ກຳໄລ = ຍອດຂາຍ − ຄ່າໂຄສະນາ
+
+## ຫຼາຍລະດັບ ແລະ ການກັນນັບຊ້ຳ
+
+ຕາຕະລາງ `Insight` ເກັບຜົນໄດ້ 3 ລະດັບ (ແຄມເປນ / ຊຸດ / ຊິ້ນ). ຖ້າບວກທຸກແຖວ
+ຄ່າໂຄສະນາອັນດຽວກັນຈະຖືກນັບເຖິງ 3 ເທື່ອ. ລະບົບຈຶ່ງກຳນົດວ່າ:
+
+- **ຍອດລວມທຸກບ່ອນ** (ໜ້າຫຼັກ, ລາຍການແຄມເປນ, ລາຍງານ, ການແຈ້ງເຕືອນ)
+  **ນັບສະເພາະແຖວລະດັບແຄມເປນ**
+- ແຖວລະດັບຊຸດ/ຊິ້ນ ເປັນ**ລາຍລະອຽດ** — ສະແດງໃນໜ້າແຄມເປນ ແລະ ໜ້າຊຸດເທົ່ານັ້ນ
+- ການ sync ຈຶ່ງດຶງລະດັບແຄມເປນສະເໝີ ບໍ່ວ່າຈະຕິກລະດັບຍ່ອຍ ຫຼື ບໍ່
+
+ກົດນີ້ຂຽນໄວ້ຢູ່ `src/lib/scope.ts` — ອ່ານກ່ອນຂຽນ query ໃໝ່ທີ່ບວກເລກ.
+
+## ການແຈ້ງເຕືອນ
+
+ໜ້າ `/alerts` ຄິດການເຕືອນໃໝ່ຈາກຂໍ້ມູນປັດຈຸບັນທຸກຄັ້ງທີ່ເປີດ (ບໍ່ໄດ້ເກັບລົງຖານຂໍ້ມູນ)
+ຈຶ່ງບໍ່ມີການເຕືອນເກົ່າຄ້າງຄາເມື່ອແກ້ຂໍ້ມູນແລ້ວ. ປັບເກນໄດ້ຢູ່ `/settings#alerts`:
+
+| ການເຕືອນ | ເກນຕັ້ງຕົ້ນ |
+|---|---|
+| ໃຊ້ເກີນງົບຕໍ່ວັນ | ເກີນງົບ 10% |
+| ງົບລວມ / ເພດານບັນຊີໃກ້ໝົດ | ໃຊ້ໄປ 80% |
+| ROAS ຕ່ຳ (7 ວັນ) | ຕ່ຳກວ່າ 1.0x |
+| ຄ່າຕໍ່ 1 ຄົນທັກສູງ | ປິດໄວ້ (ໃສ່ 0) |
+| ລູກຄ້າຄ້າງສະຖານະ “ໃໝ່” | ເກີນ 3 ວັນ |
+| ແຄມເປນໃກ້ຮອດວັນຈົບ | ພາຍໃນ 3 ວັນ |
+
+ການເຕືອນ ROAS ກວດສະເພາະແຄມເປນເປົ້າໝາຍ **ຂໍ້ຄວາມ** ແລະ **ຍອດຂາຍ** —
+ແຄມເປນປະເພດສ້າງການຮັບຮູ້ ຫຼື ເກັບລາຍຊື່ ບໍ່ໄດ້ຄາດຫວັງຍອດຂາຍໂດຍກົງ
+ຈຶ່ງບໍ່ຖືກເຕືອນຜິດໆ.
+
+## ຕໍ່ Facebook Marketing API (ທາງເລືອກ)
+
+1. ສ້າງ app ໃນ [developers.facebook.com](https://developers.facebook.com) ແລ້ວຂໍສິດ
+   `ads_read` (ຕ້ອງຜ່ານ App Review ຖ້າຈະໃຊ້ຈິງກັບບັນຊີຄົນອື່ນ)
+2. ໃສ່ Ad Account ID (`act_xxxxxxxx`) ໃນໜ້າ **ບັນຊີໂຄສະນາ**
+3. ໃສ່ access token ໃນໜ້າ **ຕັ້ງຄ່າ** (ຫຼື `FB_ACCESS_TOKEN` ໃນ `.env`)
+4. ເລືອກຊ່ວງວັນ ແລະ ລະດັບທີ່ຢາກໄດ້ ແລ້ວກົດ “ດຶງຂໍ້ມູນດຽວນີ້”
+
+ດຶງໄດ້ 3 ລະດັບ: **ແຄມເປນ** (ດຶງສະເໝີ), **ຊຸດໂຄສະນາ** ແລະ **ຊິ້ນໂຄສະນາ**
+(ຕິກເພີ່ມເອົາ — ໄດ້ລາຍລະອຽດຫຼາຍກວ່າ ແຕ່ຊ້າ ແລະ ກິນໂຄຕ້າ API ຫຼາຍກວ່າ).
+ລະບົບ upsert ໂຄງສ້າງຕາມ `fbCampaignId` / `fbAdSetId` / `fbAdId` ແລະ
+ຜົນລາຍວັນຕາມ `(ວັນ, ອົງປະກອບ)` — ຂໍ້ມູນຈາກ API ຈະທັບຂອງທີ່ປ້ອນມືສະເພາະ
+ວັນ/ອົງປະກອບດຽວກັນ. `targeting` ຂອງຊຸດຖືກຫຍໍ້ເປັນຂໍ້ຄວາມພາສາລາວໃຫ້ອ່ານງ່າຍ.
+ຜົນການດຶງທຸກຄັ້ງ (ສຳເລັດ ຫຼື ຜິດພາດ) ຖືກບັນທຶກໄວ້ໃນ `SyncLog` ແລະ ສະແດງຢູ່ໜ້າຕັ້ງຄ່າ.
+
+## ໂຄງສ້າງໂຄດ
+
+```
+prisma/schema.prisma      ໂຄງສ້າງຖານຂໍ້ມູນ (ພ້ອມຄຳອະທິບາຍພາສາລາວ)
+prisma/seed.ts            ຂໍ້ມູນຕົວຢ່າງ
+src/lib/prisma.ts         Prisma client (driver adapter)
+src/lib/date.ts           ຈັດການວັນທີ່ / ຊ່ວງວັນ  ← ທຸກການແປງວັນຕ້ອງຜ່ານໄຟລ໌ນີ້
+src/lib/metrics.ts        ລວມຍອດ ແລະ ຄິດຕົວຊີ້ວັດ
+src/lib/scope.ts          ກົດການລວມຍອດ (ກັນນັບຊ້ຳຂ້າມລະດັບ) ← ອ່ານກ່ອນຂຽນ query ບວກເລກ
+src/lib/report.ts         ສ້າງລາຍງານຕາມມິຕິຕ່າງໆ
+src/lib/alerts.ts         ເຄື່ອງກວດເຕືອນ + ເກນທີ່ຕັ້ງໄດ້
+src/lib/fb.ts             ຕົວເຊື່ອມ Facebook Marketing API (3 ລະດັບ)
+src/components/charts/    ກຣາຟ (SVG ລ້ວນ ບໍ່ໃຊ້ library ພາຍນອກ)
+src/app/                  ໜ້າຈໍ + server actions ຂອງແຕ່ລະສ່ວນ
+```
+
+## ຂໍ້ຈຳກັດທີ່ຄວນຮູ້
+
+- **ຍັງບໍ່ມີລະບົບ login** ຕາມທີ່ຕົກລົງໄວ້ — ໃຜເປີດ URL ໄດ້ ກໍ່ແກ້ຂໍ້ມູນໄດ້.
+  ໃຫ້ແລ່ນໃນເຄືອຂ່າຍພາຍໃນເທົ່ານັ້ນ ຈົນກວ່າຈະເພີ່ມ auth.
+- ໜ້າລູກຄ້າສະແດງສູງສຸດ 200 ລາຍການຕໍ່ຄັ້ງ
+- ການ sync ແລ່ນແບບ synchronous ໃນ request ດຽວ — ຊ່ວງວັນຍາວໆ ພ້ອມລະດັບຊິ້ນ
+  ອາດໃຊ້ເວລາດົນ. ດຶງເທື່ອລະອາທິດຈະໄວກວ່າ.
+- ການແຈ້ງເຕືອນຄິດສົດທຸກຄັ້ງທີ່ໂຫຼດໜ້າ (ລວມທັງເລກໃນເມນູ) — ຖ້າຂໍ້ມູນໃຫຍ່ຂຶ້ນຫຼາຍ
+  ຄວນປ່ຽນເປັນ cache ຫຼື ຄິດເປັນຮອບ
