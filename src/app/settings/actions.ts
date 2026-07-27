@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { bool, num, reqDate, reqStr, str } from "@/lib/form";
 import { resolveRange } from "@/lib/date";
-import { runSyncWithLog } from "@/lib/fb";
+import {
+  fetchFbAssets,
+  importFbAssets,
+  runSyncWithLog,
+  type FbAssetAccount,
+  type FbAssetPage,
+} from "@/lib/fb";
 import { DEFAULT_THRESHOLDS, THRESHOLD_KEYS } from "@/lib/alerts";
 
 async function put(key: string, value: string | null) {
@@ -30,6 +36,56 @@ export async function saveSettings(fd: FormData) {
   if (str(fd, "clearToken") === "1") await put("fbAccessToken", null);
 
   revalidatePath("/settings");
+}
+
+/** ຜົນການທົດສອບ/ນຳເຂົ້າ ທີ່ສົ່ງກັບໄປໃຫ້ໜ້າຈໍສະແດງ */
+export type FbConnectionState = {
+  ok: boolean;
+  message: string;
+  tokenOwner?: string;
+  accounts?: FbAssetAccount[];
+  pages?: FbAssetPage[];
+  pagesError?: string;
+} | null;
+
+export async function testFbConnection(): Promise<FbConnectionState> {
+  try {
+    const assets = await fetchFbAssets();
+    return {
+      ok: true,
+      message:
+        assets.accounts.length === 0
+          ? "ຕໍ່ໄດ້ ແຕ່ບໍ່ພົບບັນຊີໂຄສະນາ — ກວດວ່າໄດ້ assign ບັນຊີໃຫ້ system user ນີ້ແລ້ວບໍ່"
+          : `ຕໍ່ໄດ້ — ພົບ ${assets.accounts.length} ບັນຊີໂຄສະນາ ແລະ ${assets.pages.length} ເພຈ`,
+      tokenOwner: assets.tokenOwner,
+      accounts: assets.accounts,
+      pages: assets.pages,
+      pagesError: assets.pagesError,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+export async function importFbAssetsAction(): Promise<FbConnectionState> {
+  try {
+    const result = await importFbAssets();
+    revalidatePath("/settings");
+    revalidatePath("/ad-accounts");
+    revalidatePath("/fb-pages");
+    return {
+      ok: true,
+      message: `ນຳເຂົ້າແລ້ວ: ${result.accounts} ບັນຊີໂຄສະນາ, ${result.pages} ເພຈ — ພ້ອມດຶງຜົນລາຍວັນໄດ້`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function saveAlertThresholds(fd: FormData) {

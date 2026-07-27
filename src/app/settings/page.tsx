@@ -9,6 +9,7 @@ import {
 } from "./actions";
 import { getThresholds } from "@/lib/alerts";
 import { FbTokenGuide } from "@/components/FbTokenGuide";
+import { FbConnection } from "@/components/FbConnection";
 import { addDays, formatDateLao, todayStr } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
@@ -108,6 +109,7 @@ export default async function SettingsPage() {
 
             <SubmitButton>ບັນທຶກຄ່າ</SubmitButton>
           </form>
+          <FbConnection hasToken={hasToken} />
           <FbTokenGuide />
         </Card>
 

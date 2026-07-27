@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { parseDate, type DateRange } from "./date";
-import { InsightLevel } from "@/generated/prisma/enums";
+import { InsightLevel, type EntityStatus } from "@/generated/prisma/enums";
 
 /**
  * ຕົວເຊື່ອມກັບ Facebook Marketing API.
@@ -86,6 +86,221 @@ async function graphAll<T>(
   }
 
   return out;
+}
+
+/** ເອີ້ນ Graph API ເອົາ object ດຽວ (ບໍ່ແມ່ນລາຍການ) */
+async function graphOne<T>(
+  config: FbConfig,
+  path: string,
+  params: Record<string, string>,
+): Promise<T> {
+  const search = new URLSearchParams({ ...params, access_token: config.accessToken });
+  const res = await fetch(
+    `${GRAPH}/${config.apiVersion}/${path}?${search.toString()}`,
+    { cache: "no-store" },
+  );
+  const json = (await res.json()) as T & {
+    error?: { message: string; code: number };
+  };
+  if (json.error) {
+    throw new Error(`Facebook API: ${json.error.message} (code ${json.error.code})`);
+  }
+  return json;
+}
+
+// ------------------------------------------------- ທົດສອບການເຊື່ອມຕໍ່ / ນຳເຂົ້າ
+
+export type FbAssetAccount = {
+  fbAccountId: string;
+  name: string;
+  currency: string;
+  status: EntityStatus;
+  timezone: string | null;
+};
+
+export type FbAssetPage = {
+  fbPageId: string;
+  name: string;
+  category: string | null;
+};
+
+export type FbAssets = {
+  tokenOwner: string;
+  accounts: FbAssetAccount[];
+  pages: FbAssetPage[];
+  /** ດຶງເພຈບໍ່ໄດ້ກໍ່ບໍ່ເປັນຫຍັງ — ບອກເຫດຜົນໄວ້ໃຫ້ຮູ້ */
+  pagesError?: string;
+};
+
+/** ລະຫັດສະຖານະບັນຊີຂອງ Facebook → ສະຖານະໃນລະບົບເຮົາ */
+function mapAccountStatus(code?: number) {
+  switch (code) {
+    case 1:
+      return "ACTIVE" as const;
+    case 100:
+    case 101:
+      return "ARCHIVED" as const;
+    default:
+      return "PAUSED" as const;
+  }
+}
+
+/**
+ * ທົດສອບວ່າ token ໃຊ້ໄດ້ບໍ່ ແລະ ດຶງລາຍການບັນຊີໂຄສະນາ/ເພຈ ທີ່ token ນີ້ເຂົ້າເຖິງໄດ້.
+ * ໃຊ້ເພື່ອບໍ່ໃຫ້ຜູ້ໃຊ້ຕ້ອງໄປຫາ act_... ເອງ.
+ */
+export async function fetchFbAssets(): Promise<FbAssets> {
+  const config = await getFbConfig();
+  if (!config) {
+    throw new Error(
+      "ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token — ໃສ່ຢູ່ຊ່ອງຂ້າງເທິງແລ້ວກົດ “ບັນທຶກຄ່າ” ກ່ອນ",
+    );
+  }
+
+  const me = await graphOne<{ id: string; name?: string }>(config, "me", {
+    fields: "id,name",
+  });
+
+  type RawAccount = {
+    id: string;
+    name?: string;
+    currency?: string;
+    account_status?: number;
+    timezone_name?: string;
+  };
+  const accountFields =
+    "id,name,currency,account_status,timezone_name";
+
+  // system user token ບາງກໍລະນີເຫັນສະເພາະ assigned_ad_accounts
+  let raw = await graphAll<RawAccount>(config, "me/adaccounts", {
+    fields: accountFields,
+  });
+  if (raw.length === 0) {
+    try {
+      raw = await graphAll<RawAccount>(config, "me/assigned_ad_accounts", {
+        fields: accountFields,
+      });
+    } catch {
+      // ບໍ່ມີ edge ນີ້ກໍ່ຂ້າມໄປ — ຖືວ່າບໍ່ມີບັນຊີ
+    }
+  }
+
+  const accounts: FbAssetAccount[] = raw.map((a) => ({
+    fbAccountId: a.id, // ມາເປັນຮູບແບບ act_XXXXXXXX ຢູ່ແລ້ວ
+    name: a.name ?? a.id,
+    currency: a.currency ?? "USD",
+    status: mapAccountStatus(a.account_status),
+    timezone: a.timezone_name ?? null,
+  }));
+
+  // ເພຈຕ້ອງການສິດ pages_show_list — ບໍ່ມີກໍ່ຍັງໃຊ້ລະບົບໄດ້ ຈຶ່ງບໍ່ໃຫ້ລົ້ມ
+  let pages: FbAssetPage[] = [];
+  let pagesError: string | undefined;
+  try {
+    type RawPage = { id: string; name?: string; category?: string };
+    let rawPages = await graphAll<RawPage>(config, "me/accounts", {
+      fields: "id,name,category",
+    });
+    if (rawPages.length === 0) {
+      rawPages = await graphAll<RawPage>(config, "me/assigned_pages", {
+        fields: "id,name,category",
+      });
+    }
+    pages = rawPages.map((p) => ({
+      fbPageId: p.id,
+      name: p.name ?? p.id,
+      category: p.category ?? null,
+    }));
+  } catch (error) {
+    pagesError = error instanceof Error ? error.message : String(error);
+  }
+
+  return { tokenOwner: me.name ?? me.id, accounts, pages, pagesError };
+}
+
+/**
+ * ນຳເຂົ້າບັນຊີໂຄສະນາ ແລະ ເພຈ ທີ່ດຶງມາໄດ້ ລົງຖານຂໍ້ມູນ.
+ * ບັນຊີທີ່ຍັງບໍ່ມີ fbAccountId ແຕ່ຊື່ກົງກັນ ຈະຖືກຕໍ່ ID ໃສ່ໃຫ້ ແທນການສ້າງອັນຊ້ຳ.
+ */
+export async function importFbAssets(): Promise<{
+  accounts: number;
+  pages: number;
+}> {
+  const assets = await fetchFbAssets();
+  let accountCount = 0;
+  let pageCount = 0;
+
+  for (const a of assets.accounts) {
+    const existing = await prisma.adAccount.findUnique({
+      where: { fbAccountId: a.fbAccountId },
+    });
+
+    if (existing) {
+      await prisma.adAccount.update({
+        where: { id: existing.id },
+        data: { name: a.name, currency: a.currency, status: a.status },
+      });
+    } else {
+      // ຖ້າມີບັນຊີເປົ່າທີ່ຍັງບໍ່ໄດ້ຜູກ ID ໄວ້ ໃຫ້ຜູກໃສ່ອັນນັ້ນແທນການສ້າງໃໝ່
+      const unlinked = await prisma.adAccount.findFirst({
+        where: { fbAccountId: null },
+        orderBy: { createdAt: "asc" },
+      });
+      if (unlinked) {
+        await prisma.adAccount.update({
+          where: { id: unlinked.id },
+          data: {
+            fbAccountId: a.fbAccountId,
+            name: a.name,
+            currency: a.currency,
+            status: a.status,
+            timezone: a.timezone ?? unlinked.timezone,
+          },
+        });
+      } else {
+        await prisma.adAccount.create({
+          data: {
+            fbAccountId: a.fbAccountId,
+            name: a.name,
+            currency: a.currency,
+            status: a.status,
+            ...(a.timezone ? { timezone: a.timezone } : {}),
+          },
+        });
+      }
+    }
+    accountCount++;
+  }
+
+  for (const p of assets.pages) {
+    const existing = await prisma.fbPage.findUnique({
+      where: { fbPageId: p.fbPageId },
+    });
+    if (existing) {
+      await prisma.fbPage.update({
+        where: { id: existing.id },
+        data: { name: p.name, category: p.category },
+      });
+    } else {
+      const unlinked = await prisma.fbPage.findFirst({
+        where: { fbPageId: null },
+        orderBy: { createdAt: "asc" },
+      });
+      if (unlinked) {
+        await prisma.fbPage.update({
+          where: { id: unlinked.id },
+          data: { fbPageId: p.fbPageId, name: p.name, category: p.category },
+        });
+      } else {
+        await prisma.fbPage.create({
+          data: { fbPageId: p.fbPageId, name: p.name, category: p.category },
+        });
+      }
+    }
+    pageCount++;
+  }
+
+  return { accounts: accountCount, pages: pageCount };
 }
 
 // --------------------------------------------------------------------- types
