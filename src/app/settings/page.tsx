@@ -8,6 +8,7 @@ import {
   saveSettings,
 } from "./actions";
 import { getThresholds } from "@/lib/alerts";
+import { FbTokenGuide } from "@/components/FbTokenGuide";
 import { addDays, formatDateLao, todayStr } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
@@ -76,7 +77,7 @@ export default async function SettingsPage() {
                 <Field label="ເວີຊັນ API">
                   <input
                     name="fbApiVersion"
-                    defaultValue={map.get("fbApiVersion") ?? "v21.0"}
+                    defaultValue={map.get("fbApiVersion") ?? "v25.0"}
                     className="field"
                   />
                 </Field>
@@ -107,6 +108,7 @@ export default async function SettingsPage() {
 
             <SubmitButton>ບັນທຶກຄ່າ</SubmitButton>
           </form>
+          <FbTokenGuide />
         </Card>
 
         <div className="grid gap-5">

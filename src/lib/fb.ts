@@ -47,7 +47,7 @@ export async function getFbConfig(): Promise<FbConfig | null> {
 
   const accessToken = map.get("fbAccessToken") || process.env.FB_ACCESS_TOKEN || "";
   const apiVersion =
-    map.get("fbApiVersion") || process.env.FB_API_VERSION || "v21.0";
+    map.get("fbApiVersion") || process.env.FB_API_VERSION || "v25.0";
 
   return accessToken ? { accessToken, apiVersion } : null;
 }

@@ -36,8 +36,11 @@ cp .env.example .env      # ແກ້ DATABASE_URL ໃຫ້ຖືກກັບ�
 npm install
 npm run db:migrate
 
-# 4. (ທາງເລືອກ) ໃສ່ຂໍ້ມູນຕົວຢ່າງ 60 ວັນ ເພື່ອເບິ່ງໜ້າຈໍ
-npm run db:seed
+# 4. ຕັ້ງຄ່າເລີ່ມຕົ້ນຂອງຮ້ານ (ຖານຂໍ້ມູນສະອາດ ພ້ອມໃຊ້ຈິງ)
+npm run db:clear -- "ຊື່ຮ້ານຂອງທ່ານ"
+
+#    ຫຼື ຖ້າຢາກເບິ່ງໜ້າຈໍດ້ວຍຂໍ້ມູນຕົວຢ່າງ 60 ວັນກ່ອນ:
+#    npm run db:seed
 
 # 5. ແລ່ນ
 npm run dev
@@ -45,7 +48,7 @@ npm run dev
 
 ເປີດ http://localhost:3000
 
-> `npm run db:seed` **ລຶບຂໍ້ມູນທັງໝົດ** ກ່ອນໃສ່ຕົວຢ່າງ — ຢ່າແລ່ນໃສ່ຖານຂໍ້ມູນຈິງ.
+> `db:clear` ແລະ `db:seed` **ລຶບຂໍ້ມູນທັງໝົດ** ກ່ອນ — ຢ່າແລ່ນໃສ່ຖານຂໍ້ມູນຈິງທີ່ໃຊ້ຢູ່.
 
 ## ຄຳສັ່ງ
 
@@ -55,7 +58,8 @@ npm run dev
 | `npm run build` / `npm start` | build ແລະ ແລ່ນແບບ production |
 | `npm run db:migrate` | ສ້າງ/ນຳໃຊ້ migration |
 | `npm run db:studio` | ເປີດ Prisma Studio ເບິ່ງຂໍ້ມູນ |
-| `npm run db:seed` | ໃສ່ຂໍ້ມູນຕົວຢ່າງ (ລຶບຂອງເກົ່າ) |
+| `npm run db:clear` | ລ້າງຂໍ້ມູນທັງໝົດ ແລ້ວຕັ້ງຄ່າເລີ່ມຕົ້ນຂອງຮ້ານ (ພ້ອມໃຊ້ຈິງ) |
+| `npm run db:seed` | ໃສ່ຂໍ້ມູນຕົວຢ່າງ 60 ວັນ (ລຶບຂອງເກົ່າ) |
 | `npm run db:reset` | reset ຖານຂໍ້ມູນ + seed ໃໝ່ |
 
 ## ວິທີໃຊ້ປະຈຳວັນ
@@ -120,10 +124,23 @@ Facebook ຕັດເງິນເປັນ USD ແຕ່ຍອດຂາຍເປ
 
 ## ຕໍ່ Facebook Marketing API (ທາງເລືອກ)
 
-1. ສ້າງ app ໃນ [developers.facebook.com](https://developers.facebook.com) ແລ້ວຂໍສິດ
-   `ads_read` (ຕ້ອງຜ່ານ App Review ຖ້າຈະໃຊ້ຈິງກັບບັນຊີຄົນອື່ນ)
-2. ໃສ່ Ad Account ID (`act_xxxxxxxx`) ໃນໜ້າ **ບັນຊີໂຄສະນາ**
-3. ໃສ່ access token ໃນໜ້າ **ຕັ້ງຄ່າ** (ຫຼື `FB_ACCESS_TOKEN` ໃນ `.env`)
+ຂັ້ນຕອນລະອຽດມີຢູ່ໃນແອັບແລ້ວ — ໜ້າ **ຕັ້ງຄ່າ** → “ເອົາ Access Token ຈາກໃສ?”
+ສະຫຼຸບຄື:
+
+1. **ຕ້ອງມີກ່ອນ:** ບັນຊີໂຄສະນາໃນ Ads Manager + [Business Manager](https://business.facebook.com)
+2. **ສ້າງ App:** [developers.facebook.com/apps](https://developers.facebook.com/apps)
+   → Create App → ປະເພດ **Business** → Add Product → **Marketing API**
+3. **ເອົາ token (ແນະນຳ — ບໍ່ໝົດອາຍຸ):** Business Settings → Users → **System Users**
+   → Add (ບົດບາດ Admin) → **Assign Assets** (ບັນຊີໂຄສະນາ + ເພຈ)
+   → **Generate New Token** → ເລືອກ App → ຕິກສິດ `ads_read`
+   *(ຢາກລອງໄວໆ: [Graph API Explorer](https://developers.facebook.com/tools/explorer)
+   ໃຫ້ token ອາຍຸ 1–2 ຊົ່ວໂມງ)*
+4. ໃສ່ Ad Account ID (`act_xxxxxxxx`) ໃນໜ້າ **ບັນຊີໂຄສະນາ**
+5. ໃສ່ access token ໃນໜ້າ **ຕັ້ງຄ່າ** (ຫຼື `FB_ACCESS_TOKEN` ໃນ `.env`)
+
+**App Review ຕ້ອງບໍ່?** ບໍ່ຕ້ອງ ຖ້າອ່ານສະເພາະບັນຊີຂອງຕົນເອງ — Standard Access
+ທີ່ໄດ້ພ້ອມ Marketing API ພຽງພໍ (ຂີດຈຳກັດການເອີ້ນຕ່ຳກວ່າ ແຕ່ພໍສຳລັບດຶງຜົນລາຍວັນ).
+ຈະຕ້ອງ Advanced Access ຜ່ານ App Review ກໍ່ຕໍ່ເມື່ອຈະດຶງບັນຊີຂອງລູກຄ້າຄົນອື່ນ.
 4. ເລືອກຊ່ວງວັນ ແລະ ລະດັບທີ່ຢາກໄດ້ ແລ້ວກົດ “ດຶງຂໍ້ມູນດຽວນີ້”
 
 ດຶງໄດ້ 3 ລະດັບ: **ແຄມເປນ** (ດຶງສະເໝີ), **ຊຸດໂຄສະນາ** ແລະ **ຊິ້ນໂຄສະນາ**
