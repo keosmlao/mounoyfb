@@ -29,13 +29,19 @@ const STEPS: Array<{ title: string; body: React.ReactNode }> = [
     title: "3. ເອົາ Access Token (ແນະນຳ: System User — ບໍ່ໝົດອາຍຸ)",
     body: (
       <>
-        <Ext href="https://business.facebook.com/settings">Business Settings</Ext> →{" "}
-        <b>Users → System Users</b> → <b>Add</b> → ຕັ້ງບົດບາດ <b>Admin</b>
+        ໃນ <Ext href="https://business.facebook.com">business.facebook.com</Ext> ກົດ
+        ຮູບ <b>ເຟືອງ ⚙</b> ຂ້າງຊື່ທຸລະກິດ → <b>Business settings</b>
         <br />
-        → <b>Assign Assets</b>: ເລືອກບັນຊີໂຄສະນາ ແລະ ເພຈ ໃຫ້ system user ນີ້
+        → ແຖບຊ້າຍ <b>Users → System Users</b> → <b>Add</b> → ຕັ້ງຊື່ + ບົດບາດ{" "}
+        <b>Admin</b>
         <br />
-        → <b>Generate New Token</b> → ເລືອກ App ທີ່ສ້າງໄວ້ → ຕິກສິດ{" "}
-        <code className="rounded bg-[var(--surface-2)] px-1">ads_read</code> → ສ້າງ token
+        → <b className="text-[var(--danger)]">Add Assets</b> (ຂ້າມບໍ່ໄດ້!): ເລືອກ{" "}
+        <b>Ad Accounts</b> → ຕິກບັນຊີຂອງທ່ານ → ເປີດສິດ <b>Manage campaigns</b>{" "}
+        ຫຼື <b>View performance</b> → Save
+        <br />
+        → <b>Generate New Token</b> → ເລືອກ App ທີ່ສ້າງໄວ້ → ຕັ້ງ Expiration ເປັນ{" "}
+        <b>Never</b> → ຕິກສິດ{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">ads_read</code> → Generate
         <br />
         <span className="text-[var(--fg-subtle)]">
           ຄັດລອກ token ໄວ້ທັນທີ — Facebook ສະແດງໃຫ້ເບິ່ງເທື່ອດຽວ
@@ -94,7 +100,18 @@ export function FbTokenGuide() {
           ))}
         </ol>
 
-        <div className="mt-4 rounded-lg bg-[var(--surface-2)] p-3 text-sm">
+        <div className="mt-4 rounded-lg bg-[var(--warning-soft)] p-3 text-sm">
+          <p className="font-medium text-[var(--warning)]">
+            ⚠ ຂໍ້ຜິດພາດທີ່ພົບຫຼາຍທີ່ສຸດ
+          </p>
+          <p className="mt-1 text-[var(--fg-muted)]">
+            ລືມກົດ <b>Add Assets</b> ໃຫ້ system user — token ຈະໃຊ້ໄດ້ ແຕ່ “ບໍ່ເຫັນ”
+            ບັນຊີໂຄສະນາໃດເລີຍ. ຖ້າກົດທົດສອບແລ້ວຂຶ້ນວ່າ “ຕໍ່ໄດ້ ແຕ່ບໍ່ພົບບັນຊີໂຄສະນາ”
+            ໃຫ້ກັບໄປເພີ່ມ asset ແລ້ວສ້າງ token ໃໝ່.
+          </p>
+        </div>
+
+        <div className="mt-3 rounded-lg bg-[var(--surface-2)] p-3 text-sm">
           <p className="font-medium">ຕ້ອງຜ່ານ App Review ບໍ່?</p>
           <p className="mt-1 text-[var(--fg-muted)]">
             <b>ບໍ່ຕ້ອງ</b> ຖ້າອ່ານສະເພາະບັນຊີໂຄສະນາຂອງຕົນເອງ — Standard Access
