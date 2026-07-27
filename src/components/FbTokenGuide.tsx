@@ -16,12 +16,21 @@ const STEPS: Array<{ title: string; body: React.ReactNode }> = [
     ),
   },
   {
-    title: "2. ສ້າງ App",
+    title: "2. ສ້າງ App (ຫຼື ໃຊ້ອັນທີ່ມີຢູ່)",
     body: (
       <>
         ໄປ <Ext href="https://developers.facebook.com/apps">developers.facebook.com/apps</Ext>{" "}
-        → <b>Create App</b> → ເລືອກປະເພດ <b>Business</b> → ຕັ້ງຊື່ (ເຊັ່ນ “Mounoy Ads”).
-        ຈາກນັ້ນໃນໜ້າ App ໃຫ້ກົດ <b>Add Product</b> → <b>Marketing API</b>.
+        → <b>Create App</b> → ປະເພດ <b>Business</b> → ຕັ້ງຊື່.
+        <br />
+        ຈາກນັ້ນໃນໜ້າ App ກົດ <b>Add use cases</b> (ມຸມຂວາເທິງ) →{" "}
+        <b>Measure ad performance data with Marketing API</b> → Add
+        <br />
+        <span className="text-[var(--fg-subtle)]">
+          ນີ້ຄື use case ທີ່ໃຫ້ສິດ{" "}
+          <code className="rounded bg-[var(--surface-2)] px-1">ads_read</code>{" "}
+          ສຳລັບອ່ານຜົນໂຄສະນາ. ຖ້າ App ເກົ່າຍັງເປັນເມນູ <b>Products</b> ໃຫ້ເລືອກ{" "}
+          <b>Marketing API → Set up</b> ແທນ
+        </span>
       </>
     ),
   },
