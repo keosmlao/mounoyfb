@@ -46,3 +46,32 @@ export function makeMoney(currency: DisplayCurrency, rate: number): MoneyFn {
     return `$${usd2.format(usd)}`;
   };
 }
+
+/**
+ * ສະກຸນທີ່ນັບເປັນຈຳນວນເຕັມ ບໍ່ມີຫົວໜ່ວຍຍ່ອຍ.
+ *
+ * Facebook ຄືນຄ່າເງິນຂອງບັນຊີໂຄສະນາເປັນ **ຫົວໜ່ວຍນ້ອຍສຸດ** ສະເໝີ —
+ * $14.03 ມາເປັນ `"1403"` — ຈຶ່ງຕ້ອງຫານ 100. ແຕ່ສະກຸນລຸ່ມນີ້ຫານບໍ່ໄດ້
+ * ບໍ່ດັ່ງນັ້ນ 1,403,000 ກີບ ຈະກາຍເປັນ 14,030 ກີບ.
+ *
+ * ຢືນຢັນແລ້ວກັບ USD (`"1403"` → $14.03). ຖ້າມີບັນຊີສະກຸນອື່ນແລ້ວຕົວເລກ
+ * ຜິດ 100 ເທົ່າ — ແກ້ທີ່ຊຸດນີ້ ບ່ອນດຽວ.
+ */
+const WHOLE_UNIT_CURRENCIES = new Set([
+  "LAK", "VND", "JPY", "KRW", "IDR", "CLP", "ISK", "PYG", "RWF",
+  "UGX", "VUV", "XAF", "XOF", "XPF", "KMF", "DJF", "GNF", "BIF",
+]);
+
+/**
+ * ແປງຄ່າເງິນທີ່ Facebook ຄືນມາ (ຫົວໜ່ວຍນ້ອຍສຸດ) ໃຫ້ເປັນຫົວໜ່ວຍເຕັມ.
+ * ຄືນ `null` ເມື່ອບໍ່ມີຄ່າ ເພື່ອແຍກ "ບໍ່ຮູ້" ອອກຈາກ "ສູນ".
+ */
+export function fromMinorUnits(
+  raw: string | number | null | undefined,
+  currency: string,
+): number | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return WHOLE_UNIT_CURRENCIES.has(currency.toUpperCase()) ? n : n / 100;
+}

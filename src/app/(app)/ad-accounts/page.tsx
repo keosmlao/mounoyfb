@@ -60,6 +60,7 @@ export default async function AdAccountsPage() {
                     <th>ຊື່ບັນຊີ</th>
                     <th>FB Account ID</th>
                     <th>ສະກຸນ</th>
+                    <th>ການຊຳລະ</th>
                     <th className="num">ແຄມເປນ</th>
                     <th className="num">ໃຊ້ໄປແລ້ວ</th>
                     <th>ສະຖານະ</th>
@@ -76,6 +77,9 @@ export default async function AdAccountsPage() {
                           {a.fbAccountId ?? "—"}
                         </td>
                         <td>{a.currency}</td>
+                        <td className="text-[var(--fg-muted)]">
+                          {a.fbFundingSource ?? "—"}
+                        </td>
                         <td className="num">{formatInt(a._count.campaigns)}</td>
                         <td className="num">{money(stat?.spendLak ?? 0)}</td>
                         <td>

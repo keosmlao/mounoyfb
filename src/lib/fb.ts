@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { chunkRange, countDays, parseDate, type DateRange } from "./date";
 import { InsightLevel, SegmentKind, type EntityStatus } from "@/generated/prisma/enums";
 import { SEGMENT_DEFS, buildSegKey } from "./segments";
+import { fromMinorUnits } from "./money";
 
 /**
  * ຕົວເຊື່ອມກັບ Facebook Marketing API.
@@ -121,6 +122,13 @@ export type FbAssetAccount = {
   currency: string;
   status: EntityStatus;
   timezone: string | null;
+  /** ວິທີຊຳລະທີ່ຜູກໄວ້ ເຊັ່ນ "Mastercard *7447" */
+  fundingSource: string | null;
+  // ສາມຄ່າລຸ່ມນີ້ເປັນ **ສະກຸນຂອງບັນຊີ** ແປງຈາກຫົວໜ່ວຍນ້ອຍສຸດແລ້ວ — ຢ່າລວມຂ້າມບັນຊີ
+  balance: number | null;
+  amountSpent: number | null;
+  spendCap: number | null;
+  businessName: string | null;
 };
 
 export type FbAssetPage = {
@@ -172,9 +180,16 @@ export async function fetchFbAssets(): Promise<FbAssets> {
     currency?: string;
     account_status?: number;
     timezone_name?: string;
+    funding_source_details?: { display_string?: string };
+    business?: { name?: string };
+    // ຄ່າເງິນມາເປັນຂໍ້ຄວາມ ແລະ ເປັນຫົວໜ່ວຍນ້ອຍສຸດ ("1403" = $14.03)
+    balance?: string;
+    amount_spent?: string;
+    spend_cap?: string;
   };
   const accountFields =
-    "id,name,currency,account_status,timezone_name";
+    "id,name,currency,account_status,timezone_name," +
+    "funding_source_details,business{name},balance,amount_spent,spend_cap";
 
   // system user token ບາງກໍລະນີເຫັນສະເພາະ assigned_ad_accounts
   let raw = await graphAll<RawAccount>(config, "me/adaccounts", {
@@ -190,13 +205,21 @@ export async function fetchFbAssets(): Promise<FbAssets> {
     }
   }
 
-  const accounts: FbAssetAccount[] = raw.map((a) => ({
-    fbAccountId: a.id, // ມາເປັນຮູບແບບ act_XXXXXXXX ຢູ່ແລ້ວ
-    name: a.name ?? a.id,
-    currency: a.currency ?? "USD",
-    status: mapAccountStatus(a.account_status),
-    timezone: a.timezone_name ?? null,
-  }));
+  const accounts: FbAssetAccount[] = raw.map((a) => {
+    const currency = a.currency ?? "USD";
+    return {
+      fbAccountId: a.id, // ມາເປັນຮູບແບບ act_XXXXXXXX ຢູ່ແລ້ວ
+      name: a.name ?? a.id,
+      currency,
+      status: mapAccountStatus(a.account_status),
+      timezone: a.timezone_name ?? null,
+      fundingSource: a.funding_source_details?.display_string ?? null,
+      businessName: a.business?.name ?? null,
+      balance: fromMinorUnits(a.balance, currency),
+      amountSpent: fromMinorUnits(a.amount_spent, currency),
+      spendCap: fromMinorUnits(a.spend_cap, currency),
+    };
+  });
 
   // ເພຈຕ້ອງການສິດ pages_show_list — ບໍ່ມີກໍ່ຍັງໃຊ້ລະບົບໄດ້ ຈຶ່ງບໍ່ໃຫ້ລົ້ມ
   let pages: FbAssetPage[] = [];
@@ -240,10 +263,21 @@ export async function importFbAssets(): Promise<{
       where: { fbAccountId: a.fbAccountId },
     });
 
+    // ຂໍ້ມູນການຊຳລະ — ອ່ານຢ່າງດຽວຈາກ Facebook ຈຶ່ງທັບໄດ້ທຸກເທື່ອ.
+    // `spendCap` ທີ່ຜູ້ໃຊ້ຕັ້ງເອງ **ບໍ່ຢູ່ໃນນີ້** ໂດຍຕັ້ງໃຈ (ເບິ່ງ schema).
+    const billing = {
+      fbFundingSource: a.fundingSource,
+      fbBusinessName: a.businessName,
+      fbBalance: a.balance,
+      fbAmountSpent: a.amountSpent,
+      fbSpendCap: a.spendCap,
+      fbBillingAt: new Date(),
+    };
+
     if (existing) {
       await prisma.adAccount.update({
         where: { id: existing.id },
-        data: { name: a.name, currency: a.currency, status: a.status },
+        data: { name: a.name, currency: a.currency, status: a.status, ...billing },
       });
     } else {
       // ຖ້າມີບັນຊີເປົ່າທີ່ຍັງບໍ່ໄດ້ຜູກ ID ໄວ້ ໃຫ້ຜູກໃສ່ອັນນັ້ນແທນການສ້າງໃໝ່
@@ -260,6 +294,7 @@ export async function importFbAssets(): Promise<{
             currency: a.currency,
             status: a.status,
             timezone: a.timezone ?? unlinked.timezone,
+            ...billing,
           },
         });
       } else {
@@ -270,6 +305,7 @@ export async function importFbAssets(): Promise<{
             currency: a.currency,
             status: a.status,
             ...(a.timezone ? { timezone: a.timezone } : {}),
+            ...billing,
           },
         });
       }

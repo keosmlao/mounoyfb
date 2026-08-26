@@ -91,11 +91,26 @@ model AdAccount {
   /// ສະກຸນເງິນທີ່ Facebook ຕັດຈາກບັນຊີນີ້ — ປົກກະຕິ USD
   currency    String       @default("USD")
   timezone    String       @default("Asia/Vientiane")
+  /// ເພດານທີ່ **ຜູ້ໃຊ້ຕັ້ງເອງ** ໄວ້ເຕືອນ — ຄົນລະອັນກັບ `fbSpendCap`
   spendCap    Float?
   status      EntityStatus @default(ACTIVE)
   note        String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
+
+  // --- ຂໍ້ມູນການຊຳລະຈາກ Facebook — ອ່ານຢ່າງດຽວ, ຖືກທັບທຸກເທື່ອທີ່ນຳເຂົ້າ ---
+  /// ວິທີຊຳລະທີ່ຜູກໄວ້ ເຊັ່ນ "Mastercard *7447"
+  fbFundingSource String?
+  /// ຍອດທີ່ຍັງບໍ່ທັນຖືກຮຽກເກັບ — ສະກຸນຂອງບັນຊີ (`currency`) ບໍ່ແມ່ນກີບ
+  fbBalance       Float?
+  /// ໃຊ້ໄປແລ້ວທັງໝົດຕັ້ງແຕ່ເປີດບັນຊີ — ສະກຸນຂອງບັນຊີ ບໍ່ແມ່ນກີບ
+  fbAmountSpent   Float?
+  /// ເພດານທີ່ຕັ້ງໄວ້ຝັ່ງ Facebook (0 = ບໍ່ໄດ້ຕັ້ງ) — ສະກຸນຂອງບັນຊີ
+  fbSpendCap      Float?
+  /// ບັນຊີທຸລະກິດ (Business Manager) ທີ່ເປັນເຈົ້າຂອງບັນຊີໂຄສະນານີ້
+  fbBusinessName  String?
+  /// ເວລາທີ່ດຶງຂໍ້ມູນການຊຳລະຄັ້ງລ້າສຸດ — ວ່າງ = ຍັງບໍ່ເຄີຍນຳເຂົ້າ
+  fbBillingAt     DateTime?
 
   campaigns Campaign[]
   insights  Insight[]
