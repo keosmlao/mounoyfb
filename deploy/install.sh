@@ -5,6 +5,9 @@
 # ແລ່ນ **ຢູ່ເຊີບເວີ** ຫຼັງຈາກເອົາໂຄດຂຶ້ນໄປແລ້ວ:
 #     cd /opt/fbmonoy && sudo DOMAIN=example.com bash deploy/install.sh
 #
+# ບໍ່ມີໂດເມນ ໃຊ້ IP:PORT ໂດຍກົງ:
+#     sudo PORT=3002 bash deploy/install.sh
+#
 # ບໍ່ໃສ່ DOMAIN ກໍ່ໄດ້ — ຈະຂ້າມ nginx ແລະ HTTPS ໄປ ແລ້ວແອັບຟັງຢູ່ 127.0.0.1:3000
 #
 # ແລ່ນຊ້ຳໄດ້ — ສິ່ງທີ່ມີແລ້ວຈະຖືກຂ້າມ ບໍ່ແມ່ນສ້າງທັບ.
@@ -15,7 +18,7 @@ APP_DIR="${APP_DIR:-/opt/fbmonoy}"
 APP_USER="${APP_USER:-mn}"
 DB_NAME="fbmonoy"
 DB_USER="fbmonoy"
-PORT=3000
+PORT="${PORT:-3000}"
 
 say()  { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
@@ -81,13 +84,14 @@ PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT
 say "ຕັ້ງຄ່າ .env"
 if [ -f "$APP_DIR/.env" ]; then
   ok ".env ມີແລ້ວ — ບໍ່ຂຽນທັບ"
-  # ບັງຄັບ COOKIE_SECURE=1 ເພາະຈະເປີດອອກອິນເຕີເນັດ
+  # ມີ HTTPS ຈຶ່ງບັງຄັບ secure cookie — ບໍ່ມີ HTTPS ແລ້ວຕັ້ງ 1 ຈະ login ບໍ່ໄດ້ເລີຍ
+  if [ -n "$DOMAIN" ]; then WANT_SECURE=1; else WANT_SECURE=0; fi
   if grep -q '^COOKIE_SECURE=' "$APP_DIR/.env"; then
-    sed -i 's/^COOKIE_SECURE=.*/COOKIE_SECURE=1/' "$APP_DIR/.env"
+    sed -i "s/^COOKIE_SECURE=.*/COOKIE_SECURE=$WANT_SECURE/" "$APP_DIR/.env"
   else
-    echo 'COOKIE_SECURE=1' >> "$APP_DIR/.env"
+    echo "COOKIE_SECURE=$WANT_SECURE" >> "$APP_DIR/.env"
   fi
-  ok "ບັງຄັບ COOKIE_SECURE=1"
+  ok "ຕັ້ງ COOKIE_SECURE=$WANT_SECURE"
   APP_PASSWORD="$(grep -oP '(?<=^APP_PASSWORD=).*' "$APP_DIR/.env" | tr -d '"')"
   [ -n "$APP_PASSWORD" ] || die "ບໍ່ພົບ APP_PASSWORD ໃນ .env — ໃສ່ກ່ອນ ບໍ່ດັ່ງນັ້ນ login ບໍ່ໄດ້"
 else
@@ -99,7 +103,7 @@ DATABASE_URL="postgresql://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME?schema=publ
 APP_PASSWORD=$APP_PASSWORD
 SESSION_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 # ເປີດອອກອິນເຕີເນັດຜ່ານ HTTPS — ບັງຄັບໃຫ້ cookie ສົ່ງສະເພາະ https
-COOKIE_SECURE=1
+COOKIE_SECURE=$([ -n "$DOMAIN" ] && echo 1 || echo 0)
 
 FB_API_VERSION="v25.0"
 FB_ACCESS_TOKEN=""
@@ -135,13 +139,18 @@ ok "build ສຳເລັດ"
 
 # ------------------------------------------------------------- 5. ບໍລິການ
 say "ຕັ້ງໃຫ້ແລ່ນເປັນບໍລິການ"
-sed "s|/opt/fbmonoy|$APP_DIR|g; s|^User=.*|User=$APP_USER|" \
+# ບໍ່ມີ nginx = ຕ້ອງຟັງທຸກ interface ບໍ່ດັ່ງນັ້ນເຂົ້າຈາກນອກບໍ່ໄດ້
+if [ -n "$DOMAIN" ]; then BIND=127.0.0.1; else BIND=0.0.0.0; fi
+
+sed "s|/opt/fbmonoy|$APP_DIR|g; s|^User=.*|User=$APP_USER|; \
+     s|^Environment=PORT=.*|Environment=PORT=$PORT|; \
+     s|^Environment=HOSTNAME=.*|Environment=HOSTNAME=$BIND|" \
   "$APP_DIR/deploy/fbmonoy.service" > /etc/systemd/system/fbmonoy.service
 systemctl daemon-reload
 systemctl enable --now fbmonoy
 sleep 3
 systemctl is-active --quiet fbmonoy \
-  && ok "ບໍລິການແລ່ນຢູ່" \
+  && ok "ບໍລິການແລ່ນຢູ່ ($BIND:$PORT)" \
   || die "ບໍລິການບໍ່ຂຶ້ນ — ເບິ່ງດ້ວຍ: journalctl -u fbmonoy -n 50"
 
 for i in $(seq 1 20); do
@@ -154,8 +163,9 @@ curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null \
 
 # --------------------------------------------------------------- 6. nginx
 if [ -z "$DOMAIN" ]; then
-  warn "ບໍ່ໄດ້ໃສ່ DOMAIN — ຂ້າມ nginx ແລະ HTTPS"
-  warn "ແອັບຟັງຢູ່ 127.0.0.1:$PORT · ຕັ້ງພາຍຫຼັງ: sudo DOMAIN=... bash deploy/install.sh"
+  warn "ບໍ່ໄດ້ໃສ່ DOMAIN — ຂ້າມ nginx ແລະ HTTPS · ແອັບຟັງຢູ່ $BIND:$PORT"
+  warn "ບໍ່ມີ HTTPS = ລະຫັດຜ່ານຖືກສົ່ງແບບອ່ານໄດ້ ຢ່າໃຊ້ກັບຂໍ້ມູນສຳຄັນຜ່ານອິນເຕີເນັດ"
+  warn "ຕັ້ງພາຍຫຼັງໄດ້: sudo DOMAIN=... bash deploy/install.sh"
 else
 say "ຕັ້ງ nginx"
 mkdir -p /var/www/certbot
@@ -201,7 +211,7 @@ cat <<EOF
 ────────────────────────────────────────────────
  ຕິດຕັ້ງສຳເລັດ
 
- ເວັບ            ${DOMAIN:+https://$DOMAIN}${DOMAIN:-http://127.0.0.1:3000 (ຍັງບໍ່ໄດ້ຕັ້ງ nginx)}
+ ເວັບ            ${DOMAIN:+https://$DOMAIN}${DOMAIN:-http://<IP ເຊີບເວີ>:$PORT}
  ລະຫັດເຂົ້າລະບົບ  $APP_PASSWORD
 
  ຄຳສັ່ງທີ່ໃຊ້ເລື້ອຍ

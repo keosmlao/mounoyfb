@@ -19,8 +19,10 @@ WorkingDirectory=/opt/fbmonoy
 # ອ່ານ DATABASE_URL, APP_PASSWORD, SESSION_SECRET ຈາກໄຟລ໌ນີ້
 EnvironmentFile=/opt/fbmonoy/.env
 Environment=NODE_ENV=production
+# PORT ແລະ HOSTNAME ຖືກ install.sh ຂຽນທັບຕາມການຕັ້ງຄ່າ:
+#   ມີ nginx  → HOSTNAME=127.0.0.1 (ໃຫ້ nginx ເປັນທາງເຂົ້າດຽວ)
+#   ບໍ່ມີ     → HOSTNAME=0.0.0.0   (ເຂົ້າກົງທາງ IP:PORT)
 Environment=PORT=3000
-# ຟັງແຕ່ localhost — ໃຫ້ nginx ເປັນທາງເຂົ້າດຽວ
 Environment=HOSTNAME=127.0.0.1
 
 ExecStart=/usr/bin/npm run start
