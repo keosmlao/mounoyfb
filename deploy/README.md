@@ -179,3 +179,13 @@ sudo systemctl restart fbmonoy
 | certbot ວ່າຢືນຢັນບໍ່ໄດ້ | port 80 ບໍ່ໄດ້ forward ຈາກອິນເຕີເນັດ |
 | login ແລ້ວເດັ້ງກັບໜ້າ login | `COOKIE_SECURE=1` ແຕ່ເຂົ້າຜ່ານ http — ໃຫ້ໃຊ້ https |
 | ດຶງ Facebook ບໍ່ໄດ້ | ເຊີບເວີອອກອິນເຕີເນັດບໍ່ໄດ້ ຫຼື token ໝົດອາຍຸ |
+| `Database "fbmonoy" does not exist` | ຍັງບໍ່ໄດ້ແລ່ນ `install.sh` — ມັນສ້າງ DB ໃຫ້ |
+| ໜ້າເປີດຊ້າ 5 ວິນາທີ | ກຳລັງແລ່ນ `npm run dev` — ຢູ່ເຊີບເວີຕ້ອງໃຊ້ production |
+
+## ຢ່າແລ່ນ `npm run dev` ຢູ່ເຊີບເວີ
+
+`next dev` compile ໃໝ່ທຸກເທື່ອທີ່ເປີດໜ້າ (ຊ້າ 5 ວິນາທີ), ເປີດເຜີຍ source code
+ຜ່ານ source map, ກິນໜ່ວຍຄວາມຈຳຫຼາຍ ແລະ ດັບແລ້ວບໍ່ຟື້ນເອງ.
+
+ໃຫ້ໃຊ້ `install.sh` ຊຶ່ງ build ແລ້ວແລ່ນຜ່ານ systemd — ຟື້ນເອງເມື່ອດັບ
+ແລະ ຟັງແຕ່ `127.0.0.1` ໃຫ້ nginx ເປັນທາງເຂົ້າດຽວ.

@@ -46,12 +46,19 @@ fi
 say "ຕັ້ງຖານຂໍ້ມູນ"
 systemctl enable --now postgresql >/dev/null 2>&1 || true
 
-if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
-  ok "ຜູ້ໃຊ້ $DB_USER ມີແລ້ວ — ບໍ່ປ່ຽນລະຫັດ"
+# ລະຫັດ DB ຕ້ອງກົງກັບ .env ສະເໝີ — ຖ້າ .env ມີຢູ່ແລ້ວໃຫ້ຖືເປັນຫຼັກ
+# (ບໍ່ດັ່ງນັ້ນ .env ຊີ້ລະຫັດໜຶ່ງ ແຕ່ Postgres ໃຊ້ອີກລະຫັດ ແລ້ວຕໍ່ບໍ່ໄດ້)
+DB_PASS=""
+if [ -f "$APP_DIR/.env" ]; then
   DB_PASS="$(grep -oP '(?<=://'"$DB_USER"':)[^@]+' "$APP_DIR/.env" 2>/dev/null || true)"
-  [ -n "$DB_PASS" ] || die "ມີຜູ້ໃຊ້ DB ຢູ່ແລ້ວ ແຕ່ຫາລະຫັດໃນ .env ບໍ່ພົບ — ແກ້ .env ເອງກ່ອນ"
+fi
+[ -n "$DB_PASS" ] || DB_PASS="$(openssl rand -base64 24 | tr -d '/+=')"
+
+if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
+  # ບັງຄັບໃຫ້ລະຫັດກົງກັບ .env — ກັນກໍລະນີສ້າງໄວ້ກ່ອນດ້ວຍລະຫັດອື່ນ
+  sudo -u postgres psql -qc "ALTER USER $DB_USER WITH PASSWORD '$DB_PASS';"
+  ok "ຜູ້ໃຊ້ $DB_USER ມີແລ້ວ — ຊິງລະຫັດໃຫ້ກົງກັບ .env"
 else
-  DB_PASS="$(openssl rand -base64 24 | tr -d '/+=')"
   sudo -u postgres psql -qc "CREATE USER $DB_USER WITH PASSWORD '$DB_PASS';"
   ok "ສ້າງຜູ້ໃຊ້ $DB_USER"
 fi
@@ -62,6 +69,11 @@ else
   sudo -u postgres psql -qc "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
   ok "ສ້າງຖານຂໍ້ມູນ $DB_NAME"
 fi
+
+# ຢືນຢັນວ່າແອັບຈະຕໍ່ໄດ້ຈິງ ກ່ອນໄປຕໍ່ — ດີກວ່າໄປລົ້ມຕອນ migrate
+PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -tAc "SELECT 1" >/dev/null 2>&1 \
+  && ok "ຕໍ່ຖານຂໍ້ມູນດ້ວຍລະຫັດນີ້ໄດ້" \
+  || die "ຕໍ່ຖານຂໍ້ມູນບໍ່ໄດ້ — ກວດ pg_hba.conf ວ່າອະນຸຍາດ md5/scram ຈາກ localhost ບໍ່"
 
 # ------------------------------------------------------------------ 3. .env
 say "ຕັ້ງຄ່າ .env"
@@ -75,6 +87,7 @@ if [ -f "$APP_DIR/.env" ]; then
   fi
   ok "ບັງຄັບ COOKIE_SECURE=1"
   APP_PASSWORD="$(grep -oP '(?<=^APP_PASSWORD=).*' "$APP_DIR/.env" | tr -d '"')"
+  [ -n "$APP_PASSWORD" ] || die "ບໍ່ພົບ APP_PASSWORD ໃນ .env — ໃສ່ກ່ອນ ບໍ່ດັ່ງນັ້ນ login ບໍ່ໄດ້"
 else
   APP_PASSWORD="$(openssl rand -base64 12 | tr -d '/+=')"
   cat > "$APP_DIR/.env" <<EOF
