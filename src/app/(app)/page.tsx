@@ -21,7 +21,7 @@ import { totalsScope } from "@/lib/scope";
 import { AlertList } from "@/components/AlertList";
 import { buildAlerts, countActionable } from "@/lib/alerts";
 import { AdviceList } from "@/components/AdviceList";
-import { actionable, buildAdvice, waiting } from "@/lib/advice";
+import { actionable, buildAdvice, summary, waiting } from "@/lib/advice";
 import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
@@ -94,6 +94,7 @@ export default async function DashboardPage({
   const advice = await buildAdvice(range);
   const topAdvice = actionable(advice).slice(0, 4);
   const blocked = waiting(advice).slice(0, 2);
+  const econSummary = summary(advice).slice(0, 1);
   const [activeCampaigns, newLeads] = counts;
 
   // ---- ຂໍ້ມູນລາຍວັນສຳລັບກຣາຟ
@@ -145,6 +146,13 @@ export default async function DashboardPage({
           </>
         }
       />
+
+      {econSummary.length > 0 ? (
+        <Card className="mb-5">
+          <CardHeader title="ສະຫຼຸບຮອບນີ້" />
+          <AdviceList advice={econSummary} />
+        </Card>
+      ) : null}
 
       {topAdvice.length > 0 ? (
         <Card className="mb-5">

@@ -5,7 +5,7 @@ import { AdviceList } from "@/components/AdviceList";
 import { resolveRange } from "@/lib/date";
 import { loadMoney } from "@/lib/money-server";
 import { formatInt, formatPercent } from "@/lib/format";
-import { actionable, buildAdvice, waiting } from "@/lib/advice";
+import { actionable, buildAdvice, summary, waiting } from "@/lib/advice";
 import {
   buildAllSegmentReports,
   hasData,
@@ -221,6 +221,16 @@ export default async function AnalysisPage({
       />
 
       <div className="mt-5 grid gap-5">
+        {summary(advice).length > 0 ? (
+          <Card>
+            <CardHeader
+              title="ສະຫຼຸບຮອບນີ້"
+              subtitle="ກຳໄລສຸດທິ · ROAS ຈິງທຽບຈຸດຄຸ້ມທຶນ · ຄ່າໂຄສະນາຕໍ່ອໍເດີ"
+            />
+            <AdviceList advice={summary(advice)} />
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader
             title="ຄວນເຮັດຫຍັງຕໍ່"

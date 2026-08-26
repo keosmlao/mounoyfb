@@ -123,6 +123,11 @@ export async function adviseCreativeFatigue(
 
 // ------------------------------------------------------- ເສດຖະສາດຂອງອໍເດີ
 
+/** ເປີເຊັນແບບຈຳນວນເຕັມ — ຕົວເລກລະດັບນີ້ບອກທົດນິຍົມໄປກໍ່ບໍ່ຊ່ວຍຕັດສິນໃຈ */
+function whole(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
 /** ຕ້ອງມີອໍເດີທີ່ສົ່ງສຳເລັດເທົ່ານີ້ຈຶ່ງຄິດ CAC ໄດ້ໜ້າເຊື່ອຖື */
 const MIN_DELIVERED = 5;
 /** ຄົນທັກຂັ້ນຕ່ຳກ່ອນຈະຕັດສິນເລື່ອງອັດຕາປິດການຂາຍ */
@@ -130,6 +135,10 @@ const MIN_MESSAGES_FOR_CLOSE_RATE = 20;
 
 export type OrderEconomicsSummary = {
   delivered: number;
+  returned: number;
+  /** ອັດຕາສົ່ງສຳເລັດ = ສຳເລັດ ÷ (ສຳເລັດ + ຕີກັບ) */
+  deliveryRate: number;
+  netRevenue: number;
   /** ກຳໄລສະເລ່ຍຕໍ່ອໍເດີ ກ່ອນຫັກຄ່າໂຄສະນາ = ເພດານ CAC */
   marginPerOrder: number;
   /** ROAS ຂັ້ນຕ່ຳທີ່ຕ້ອງໄດ້ຈຶ່ງບໍ່ຂາດທຶນ */
@@ -178,6 +187,9 @@ export async function orderEconomics(
 
   return {
     delivered: econ.delivered,
+    returned: econ.returned,
+    deliveryRate: 1 - econ.returnRate,
+    netRevenue: econ.netRevenue,
     marginPerOrder,
     breakEvenRoas: marginRate > 0 ? 1 / marginRate : 0,
     adSpend,
@@ -262,7 +274,7 @@ export async function adviseUnitEconomics(
           reason:
             `ຄ່າໂຄສະນາຕໍ່ 1 ອໍເດີ ${money(cac)} ແຕ່ກຳໄລສະເລ່ຍຕໍ່ອໍເດີມີແຕ່ ` +
             `${money(econ.marginPerOrder)} — ຂາດທຶນ ${money(cac - econ.marginPerOrder)} ຕໍ່ອໍເດີ`,
-          impact: `ຕ້ອງຫຼຸດຄ່າໂຄສະນາລົງ ${formatPercent(1 - safeDiv(econ.marginPerOrder, cac))} ຫຼື ຂຶ້ນລາຄາ/ຫຼຸດຕົ້ນທຶນ`,
+          impact: `ຕ້ອງຫຼຸດຄ່າໂຄສະນາລົງ ${whole(1 - safeDiv(econ.marginPerOrder, cac))} ຫຼື ຂຶ້ນລາຄາ/ຫຼຸດຕົ້ນທຶນ`,
           confidence: confidenceFrom(totals.delivered, MIN_DELIVERED),
           sample: `${formatInt(totals.delivered)} ອໍເດີສົ່ງສຳເລັດ · ${money(t.spendLak)} ຄ່າໂຄສະນາ`,
           href: `/campaigns/${id}`,
@@ -283,7 +295,7 @@ export async function adviseUnitEconomics(
           kind: "watch",
           title: `"${name}" ຄົນທັກຫຼາຍ ແຕ່ປິດການຂາຍໄດ້ໜ້ອຍ`,
           reason:
-            `ອັດຕາປິດ ${formatPercent(rate)} ຕ່ຳກວ່າຄ່າສະເລ່ຍ ${formatPercent(baseCloseRate)} ` +
+            `ອັດຕາປິດ ${whole(rate)} ຕ່ຳກວ່າຄ່າສະເລ່ຍ ${whole(baseCloseRate)} ` +
             `(${formatInt(t.messages)} ຄົນທັກ → ${formatInt(totals.delivered)} ອໍເດີສຳເລັດ)`,
           impact:
             "ມັກເປັນເລື່ອງຄຸນນະພາບຄົນທັກ ຫຼື ການຕອບແຊັດ — ກວດຂໍ້ຄວາມໂຄສະນາວ່າກົງກັບສິນຄ້າຈິງບໍ່",
@@ -340,6 +352,42 @@ export async function adviseWaiting(
         "ບັນທຶກອໍເດີທີ່ຂາຍໄດ້ພ້ອມຜູກແຄມເປນ ແລ້ວລະບົບຈະຄິດ CAC, break-even ROAS ແລະ ກຳໄລສຸດທິໃຫ້",
       confidence: "low" as Confidence,
       sample: `${formatInt(delivered)}/${MIN_DELIVERED} ອໍເດີສົ່ງສຳເລັດ`,
+      href: "/orders",
+    },
+  ];
+}
+
+/**
+ * ສະຫຼຸບເສດຖະສາດຂອງຮອບນີ້ — ສະແດງສະເໝີເມື່ອມີອໍເດີພຽງພໍ
+ * ບໍ່ວ່າຜົນຈະດີ ຫຼື ບໍ່ດີ ເພາະຕົວເລກເຫຼົ່ານີ້ຄືສິ່ງທີ່ຄົນຕ້ອງເບິ່ງທຸກມື້.
+ */
+export function adviseEconomicsSummary(
+  econ: OrderEconomicsSummary,
+  money: MoneyFn,
+): Advice[] {
+  const healthy = econ.contributionProfit >= 0;
+  const cushion = safeDiv(econ.actualRoas, econ.breakEvenRoas);
+
+  return [
+    {
+      id: "info:economics",
+      kind: "info",
+      title: healthy
+        ? `ກຳໄລສຸດທິ ${money(econ.contributionProfit)} ໃນຮອບນີ້`
+        : `ຂາດທຶນ ${money(Math.abs(econ.contributionProfit))} ໃນຮອບນີ້`,
+      reason:
+        `ROAS ຈິງ ${econ.actualRoas.toFixed(2)}x · ຕ້ອງໄດ້ຢ່າງໜ້ອຍ ` +
+        `${econ.breakEvenRoas.toFixed(2)}x ຈຶ່ງຄຸ້ມທຶນ · ` +
+        `ຄ່າໂຄສະນາຕໍ່ອໍເດີ ${money(safeDiv(econ.adSpend, econ.delivered))} ` +
+        `ຈາກເພດານ ${money(econ.marginPerOrder)}`,
+      impact:
+        `ອັດຕາສົ່ງສຳເລັດ ${whole(econ.deliveryRate)} ` +
+        `(ຕີກັບ ${formatInt(econ.returned)} ຈາກ ${formatInt(econ.delivered + econ.returned)}) · ` +
+        (healthy
+          ? `ຍັງເພີ່ມຄ່າໂຄສະນາໄດ້ອີກ ${cushion > 1 ? whole(cushion - 1) : "0%"} ກ່ອນຮອດຈຸດຄຸ້ມທຶນ`
+          : `ຕ້ອງຫຼຸດຄ່າໂຄສະນາ ຫຼື ເພີ່ມກຳໄລຕໍ່ອໍເດີ`),
+      confidence: confidenceFrom(econ.delivered, MIN_DELIVERED),
+      sample: `${formatInt(econ.delivered)} ອໍເດີສົ່ງສຳເລັດ · ${money(econ.adSpend)} ຄ່າໂຄສະນາ`,
       href: "/orders",
     },
   ];

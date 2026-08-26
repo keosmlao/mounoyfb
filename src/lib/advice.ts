@@ -18,6 +18,7 @@ import { SegmentKind } from "@/generated/prisma/enums";
 import { confidenceFrom, suggestBudgetStep, type Advice } from "./advice-types";
 import {
   adviseCreativeFatigue,
+  adviseEconomicsSummary,
   adviseUnitEconomics,
   adviseWaiting,
   orderEconomics,
@@ -353,13 +354,14 @@ export async function buildAdvice(range: DateRange): Promise<Advice[]> {
     await Promise.all([
       adviseCampaigns(range, money),
       adviseTrend(range, money),
-      adviseBreakEven(range, money),
+      econ ? Promise.resolve([]) : adviseBreakEven(range, money),
       adviseCreativeFatigue(range, money),
       econ ? adviseUnitEconomics(range, money, econ) : Promise.resolve([]),
       adviseWaiting(range, money, econ),
     ]);
 
   const all = [
+    ...(econ ? adviseEconomicsSummary(econ, money) : []),
     ...unit,
     ...campaigns,
     ...segmentAdvice,
@@ -390,5 +392,10 @@ export function actionable(advice: Advice[]): Advice[] {
 
 /** ສິ່ງທີ່ຍັງຕັດສິນບໍ່ໄດ້ ແລະ ຂາດຫຍັງ — ສະແດງແຍກຈາກຄຳແນະນຳ */
 export function waiting(advice: Advice[]): Advice[] {
-  return advice.filter((a) => a.kind === "wait" || a.kind === "info");
+  return advice.filter((a) => a.kind === "wait");
+}
+
+/** ສະຫຼຸບຕົວເລກຂອງຮອບ (ກຳໄລ, ROAS, CAC) — ບໍ່ແມ່ນສິ່ງທີ່ຕ້ອງລົງມື */
+export function summary(advice: Advice[]): Advice[] {
+  return advice.filter((a) => a.kind === "info");
 }
