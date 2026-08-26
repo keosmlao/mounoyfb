@@ -1,6 +1,19 @@
 import { prisma } from "./prisma";
 import { parseDate, toDateInput, formatDateLao, type DateRange } from "./date";
-import { derive, groupTotals, type Derived } from "./metrics";
+import {
+  derive,
+  groupTotals,
+  EMPTY_TOTALS,
+  type Derived,
+  type Totals,
+} from "./metrics";
+import {
+  deriveOrderEconomics,
+  groupOrderTotals,
+  sumOrderTotals,
+  EMPTY_ORDER_TOTALS,
+  type OrderEconomics,
+} from "./orders";
 import { OBJECTIVE_LABEL } from "./labels";
 import { totalsScope } from "./scope";
 
@@ -15,121 +28,158 @@ export const GROUP_BYS = {
 
 export type GroupBy = keyof typeof GROUP_BYS;
 
-export type ReportRow = Derived & {
-  key: string;
-  label: string;
-  href?: string;
-};
+export type ReportRow = Derived &
+  OrderEconomics & {
+    key: string;
+    label: string;
+    href?: string;
+    hasOrderData: boolean;
+  };
+
+export type ReportTotals = Derived & OrderEconomics & { hasOrderData: boolean };
 
 /**
- * ດຶງແຖວ Insight ໃນຊ່ວງວັນ ແລ້ວຈັດກຸ່ມຕາມມິຕິທີ່ເລືອກ.
- * ຂໍ້ມູນລາຍວັນມີປະລິມານນ້ອຍ ຈຶ່ງລວມຢູ່ JS ໄດ້ ແລະ ຄິດຕົວຊີ້ວັດເທິງຍອດລວມທີ່ຖືກຕ້ອງ
- * (ບໍ່ແມ່ນຄ່າສະເລ່ຍຂອງອັດຕາສ່ວນ ຊຶ່ງຈະຜິດ).
+ * ລວມ 2 ແຫຼ່ງໂດຍບໍ່ປົນຄວາມໝາຍ:
+ * - Insight = ຜົນທີ່ Meta ລາຍງານ (spend, message, Meta purchase)
+ * - Order = ຍອດຂາຍຈິງຂອງຮ້ານ (delivered, cost, return)
  */
 export async function buildReport(
   range: DateRange,
   groupBy: GroupBy,
-): Promise<{ rows: ReportRow[]; totals: Derived }> {
-  const insights = await prisma.insight.findMany({
-    where: {
-      ...totalsScope,
-      date: { gte: parseDate(range.from), lte: parseDate(range.to) },
-    },
-    include: {
-      campaign: {
-        select: {
-          id: true,
-          name: true,
-          objective: true,
-          productId: true,
-          pageId: true,
-          product: { select: { name: true } },
-          page: { select: { name: true } },
+): Promise<{ rows: ReportRow[]; totals: ReportTotals }> {
+  const dateWhere = { gte: parseDate(range.from), lte: parseDate(range.to) };
+  const [insights, orders] = await Promise.all([
+    prisma.insight.findMany({
+      where: { ...totalsScope, date: dateWhere },
+      include: {
+        campaign: {
+          select: {
+            id: true,
+            name: true,
+            objective: true,
+            productId: true,
+            pageId: true,
+            product: { select: { name: true } },
+            page: { select: { name: true } },
+          },
+        },
+        adAccount: { select: { id: true, name: true } },
+      },
+    }),
+    prisma.order.findMany({
+      where: { date: dateWhere },
+      include: {
+        product: { select: { name: true } },
+        campaign: {
+          select: {
+            id: true,
+            name: true,
+            objective: true,
+            productId: true,
+            pageId: true,
+            adAccount: { select: { id: true, name: true } },
+            product: { select: { name: true } },
+            page: { select: { name: true } },
+          },
         },
       },
-      adAccount: { select: { id: true, name: true } },
-    },
-  });
+    }),
+  ]);
 
-  type Row = (typeof insights)[number];
+  type InsightRow = (typeof insights)[number];
+  type OrderRow = (typeof orders)[number];
 
-  const keyOf = (r: Row): string => {
+  const insightKey = (r: InsightRow): string => {
     switch (groupBy) {
-      case "campaign":
-        return r.campaignId ?? `acct:${r.adAccountId}`;
-      case "account":
-        return r.adAccountId;
-      case "product":
-        return r.campaign?.productId ?? "none";
-      case "objective":
-        return r.campaign?.objective ?? "none";
-      case "page":
-        return r.campaign?.pageId ?? "none";
-      case "day":
-        return toDateInput(r.date);
+      case "campaign": return r.campaignId ?? "none";
+      case "account": return r.adAccountId;
+      case "product": return r.campaign?.productId ?? "none";
+      case "objective": return r.campaign?.objective ?? "none";
+      case "page": return r.campaign?.pageId ?? "none";
+      case "day": return toDateInput(r.date);
     }
   };
 
-  const labelOf = (r: Row): string => {
+  const orderKey = (r: OrderRow): string => {
     switch (groupBy) {
-      case "campaign":
-        return r.campaign?.name ?? `${r.adAccount.name} (ລະດັບບັນຊີ)`;
-      case "account":
-        return r.adAccount.name;
-      case "product":
-        return r.campaign?.product?.name ?? "ບໍ່ໄດ້ຜູກສິນຄ້າ";
-      case "objective":
-        return r.campaign ? OBJECTIVE_LABEL[r.campaign.objective] : "ບໍ່ລະບຸ";
-      case "page":
-        return r.campaign?.page?.name ?? "ບໍ່ໄດ້ຜູກເພຈ";
-      case "day":
-        return formatDateLao(r.date);
+      case "campaign": return r.campaignId ?? "none";
+      case "account": return r.campaign?.adAccount.id ?? "none";
+      case "product": return r.productId ?? r.campaign?.productId ?? "none";
+      case "objective": return r.campaign?.objective ?? "none";
+      case "page": return r.campaign?.pageId ?? "none";
+      case "day": return toDateInput(r.date);
     }
   };
 
   const labels = new Map<string, string>();
   const hrefs = new Map<string, string>();
+
   for (const r of insights) {
-    const key = keyOf(r);
-    if (!labels.has(key)) labels.set(key, labelOf(r));
-    if (groupBy === "campaign" && r.campaignId) {
-      hrefs.set(key, `/campaigns/${r.campaignId}`);
+    const key = insightKey(r);
+    if (labels.has(key)) continue;
+    switch (groupBy) {
+      case "campaign":
+        labels.set(key, r.campaign?.name ?? "ບໍ່ໄດ້ຜູກແຄມເປນ");
+        if (r.campaignId) hrefs.set(key, `/campaigns/${r.campaignId}`);
+        break;
+      case "account": labels.set(key, r.adAccount.name); break;
+      case "product": labels.set(key, r.campaign?.product?.name ?? "ບໍ່ໄດ້ຜູກສິນຄ້າ"); break;
+      case "objective": labels.set(key, r.campaign ? OBJECTIVE_LABEL[r.campaign.objective] : "ບໍ່ລະບຸ"); break;
+      case "page": labels.set(key, r.campaign?.page?.name ?? "ບໍ່ໄດ້ຜູກເພຈ"); break;
+      case "day": labels.set(key, formatDateLao(r.date)); break;
     }
   }
 
-  const grouped = groupTotals(insights, keyOf);
+  for (const r of orders) {
+    const key = orderKey(r);
+    if (groupBy === "campaign" && r.campaignId) hrefs.set(key, `/campaigns/${r.campaignId}`);
+    if (labels.has(key)) continue;
+    switch (groupBy) {
+      case "campaign": labels.set(key, r.campaign?.name ?? "Organic / ບໍ່ໄດ້ຜູກແຄມເປນ"); break;
+      case "account": labels.set(key, r.campaign?.adAccount.name ?? "Organic / ບໍ່ລະບຸບັນຊີ"); break;
+      case "product": labels.set(key, r.product?.name ?? r.campaign?.product?.name ?? "ບໍ່ໄດ້ຜູກສິນຄ້າ"); break;
+      case "objective": labels.set(key, r.campaign ? OBJECTIVE_LABEL[r.campaign.objective] : "Organic / ບໍ່ລະບຸ"); break;
+      case "page": labels.set(key, r.campaign?.page?.name ?? "Organic / ບໍ່ໄດ້ຜູກເພຈ"); break;
+      case "day": labels.set(key, formatDateLao(r.date)); break;
+    }
+  }
 
-  const rows: ReportRow[] = [...grouped.entries()].map(([key, totals]) => ({
-    key,
-    label: labels.get(key) ?? key,
-    href: hrefs.get(key),
-    ...derive(totals),
-  }));
+  const insightGroups = groupTotals(insights, insightKey);
+  const orderGroups = groupOrderTotals(orders, orderKey);
+  const keys = new Set([...insightGroups.keys(), ...orderGroups.keys()]);
+
+  const rows: ReportRow[] = [...keys].map((key) => {
+    const ad = derive(insightGroups.get(key) ?? { ...EMPTY_TOTALS });
+    const order = orderGroups.get(key) ?? { ...EMPTY_ORDER_TOTALS };
+    return {
+      key,
+      label: labels.get(key) ?? key,
+      href: hrefs.get(key),
+      ...ad,
+      ...deriveOrderEconomics(order, ad.spendLak),
+      hasOrderData: order.orders > 0,
+    };
+  });
 
   rows.sort((a, b) =>
-    groupBy === "day" ? a.key.localeCompare(b.key) : b.spendLak - a.spendLak,
+    groupBy === "day"
+      ? a.key.localeCompare(b.key)
+      : Math.max(b.spendLak, b.netRevenue) - Math.max(a.spendLak, a.netRevenue),
   );
 
-  const totals = derive(
-    [...grouped.values()].reduce(
+  const adTotals = derive(
+    [...insightGroups.values()].reduce<Totals>(
       (acc, t) => {
-        for (const k of Object.keys(acc) as (keyof typeof acc)[]) acc[k] += t[k];
+        for (const key of Object.keys(acc) as (keyof Totals)[]) acc[key] += t[key];
         return acc;
       },
-      {
-        spendLak: 0,
-        impressions: 0,
-        reach: 0,
-        clicks: 0,
-        linkClicks: 0,
-        messages: 0,
-        leadsCount: 0,
-        purchases: 0,
-        revenue: 0,
-        videoViews: 0,
-      },
+      { ...EMPTY_TOTALS },
     ),
   );
+  const actual = deriveOrderEconomics(sumOrderTotals(orders), adTotals.spendLak);
 
-  return { rows, totals };
+  return {
+    rows,
+    totals: { ...adTotals, ...actual, hasOrderData: orders.length > 0 },
+  };
 }

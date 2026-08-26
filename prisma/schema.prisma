@@ -54,6 +54,16 @@ enum LeadStatus {
   LOST // ຫຼຸດ
 }
 
+/// ສະຖານະອໍເດີຈິງຂອງຮ້ານ — ແຍກຈາກ purchase ທີ່ Facebook ລາຍງານ
+enum OrderStatus {
+  PENDING // ລໍຖ້າຢືນຢັນ
+  CONFIRMED // ຢືນຢັນແລ້ວ
+  SHIPPED // ສົ່ງອອກແລ້ວ
+  DELIVERED // ລູກຄ້າຮັບສຳເລັດ — ນັບເປັນຍອດຂາຍຈິງ
+  RETURNED // ຕີກັບ
+  CANCELLED // ຍົກເລີກ
+}
+
 enum SyncStatus {
   RUNNING
   SUCCESS
@@ -125,6 +135,7 @@ model Product {
 
   campaigns Campaign[]
   leads     Lead[]
+  orders    Order[]
 }
 
 // ---------------------------------------------------------------------------
@@ -151,13 +162,14 @@ model Campaign {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
-  page      FbPage?   @relation(fields: [pageId], references: [id], onDelete: SetNull)
-  product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  adAccount AdAccount        @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  page      FbPage?          @relation(fields: [pageId], references: [id], onDelete: SetNull)
+  product   Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
   adSets    AdSet[]
   insights  Insight[]
   segments  SegmentInsight[]
   leads     Lead[]
+  orders    Order[]
 
   @@index([adAccountId])
   @@index([status])
@@ -188,6 +200,7 @@ model AdSet {
   ads      Ad[]
   insights Insight[]
   leads    Lead[]
+  orders   Order[]
 
   @@index([campaignId])
   @@index([status])
@@ -213,6 +226,7 @@ model Ad {
   adSet    AdSet     @relation(fields: [adSetId], references: [id], onDelete: Cascade)
   insights Insight[]
   leads    Lead[]
+  orders   Order[]
 
   @@index([adSetId])
   @@index([status])
@@ -336,10 +350,60 @@ model Lead {
   adSet    AdSet?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
   ad       Ad?       @relation(fields: [adId], references: [id], onDelete: SetNull)
   product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  orders   Order[]
 
   @@index([date])
   @@index([status])
   @@index([campaignId])
+}
+
+// ---------------------------------------------------------------------------
+// ອໍເດີ / ຍອດຂາຍຈິງ
+// ---------------------------------------------------------------------------
+
+/// Order ແມ່ນແຫຼ່ງຄວາມຈິງຂອງຍອດຂາຍໃນຮ້ານ.
+/// ລາຄາ ແລະ ຕົ້ນທຶນຖືກ snapshot ຕອນສ້າງ ເພື່ອໃຫ້ລາຍງານເກົ່າ
+/// ບໍ່ປ່ຽນຕາມເມື່ອແກ້ລາຄາ Product ໃນພາຍຫຼັງ.
+model Order {
+  id           String      @id @default(cuid())
+  orderNo      String?     @unique
+  date         DateTime    @db.Date
+  status       OrderStatus @default(PENDING)
+  customerName String
+  phone        String?
+  channel      String?
+  quantity     Int         @default(1)
+
+  /// ຍອດທີ່ຂາຍໃຫ້ລູກຄ້າຫຼັງສ່ວນຫຼຸດ (LAK)
+  saleAmount   Float @default(0)
+  /// ຕົ້ນທຶນສິນຄ້າລວມຂອງອໍເດີ (LAK)
+  productCost  Float @default(0)
+  shippingCost Float @default(0)
+  otherCost    Float @default(0)
+  /// ເງິນຄືນບາງສ່ວນສຳລັບອໍເດີທີ່ສົ່ງສຳເລັດ
+  refundAmount Float @default(0)
+
+  trackingNo String?
+  note       String?
+  leadId     String?
+  productId  String?
+  campaignId String?
+  adSetId    String?
+  adId       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSet    AdSet?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  ad       Ad?       @relation(fields: [adId], references: [id], onDelete: SetNull)
+
+  @@index([date])
+  @@index([status, date])
+  @@index([campaignId, date])
+  @@index([productId, date])
+  @@index([leadId])
 }
 
 // ---------------------------------------------------------------------------

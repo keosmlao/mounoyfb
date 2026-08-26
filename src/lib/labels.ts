@@ -4,6 +4,7 @@ import type {
   EntityStatus,
   InsightLevel,
   LeadStatus,
+  OrderStatus,
 } from "@/generated/prisma/enums";
 
 export const STATUS_LABEL: Record<EntityStatus, string> = {
@@ -59,6 +60,24 @@ export const LEAD_STATUS_TONE: Record<LeadStatus, string> = {
   QUALIFIED: "warning",
   WON: "success",
   LOST: "danger",
+};
+
+export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
+  PENDING: "ລໍຖ້າຢືນຢັນ",
+  CONFIRMED: "ຢືນຢັນແລ້ວ",
+  SHIPPED: "ສົ່ງອອກແລ້ວ",
+  DELIVERED: "ຮັບສຳເລັດ",
+  RETURNED: "ຕີກັບ",
+  CANCELLED: "ຍົກເລີກ",
+};
+
+export const ORDER_STATUS_TONE: Record<OrderStatus, string> = {
+  PENDING: "warning",
+  CONFIRMED: "info",
+  SHIPPED: "info",
+  DELIVERED: "success",
+  RETURNED: "danger",
+  CANCELLED: "neutral",
 };
 
 export const LEAD_CHANNELS = [
