@@ -18,7 +18,41 @@
 
 > ⚠️ **port 80 ຕ້ອງເປີດຈາກອິນເຕີເນັດ** ຕອນຂໍໃບຮັບຮອງ ແລະ ຕອນຕໍ່ອາຍຸທຸກ 90 ວັນ
 
-## ຂັ້ນຕອນ
+## ວິທີໄວ — 2 ຄຳສັ່ງ
+
+**1. ຈາກເຄື່ອງຕົນເອງ** — ເອົາໂຄດຂຶ້ນເຊີບເວີ (ຖາມລະຫັດ SSH ເທື່ອດຽວ)
+
+```bash
+ssh mn@10.0.40.77 'sudo mkdir -p /opt/fbmonoy && sudo chown $USER /opt/fbmonoy'
+rsync -az --delete \
+  --exclude node_modules --exclude .next --exclude .git --exclude .env \
+  ./ mn@10.0.40.77:/opt/fbmonoy/
+```
+
+**2. ຢູ່ເຊີບເວີ** — ຕິດຕັ້ງທັງໝົດ
+
+```bash
+ssh mn@10.0.40.77
+cd /opt/fbmonoy && sudo bash deploy/install.sh
+```
+
+ສະຄຣິບຈະ: ຕິດຕັ້ງ Node/Postgres/nginx/certbot → ສ້າງ DB ແລະ ລະຫັດແບບສຸ່ມ →
+build → ຕັ້ງ systemd → ຕັ້ງ nginx → ຂໍໃບຮັບຮອງ HTTPS → ຕັ້ງສຳຮອງ DB ທຸກຄືນ
+ແລ້ວພິມ **ລະຫັດເຂົ້າລະບົບ** ອອກມາໃຫ້ຕອນທ້າຍ.
+
+ແລ່ນຊ້ຳໄດ້ປອດໄພ — ສິ່ງທີ່ມີແລ້ວຈະຖືກຂ້າມ ບໍ່ແມ່ນສ້າງທັບ.
+
+### ອັບເດດພາຍຫຼັງ
+
+```bash
+rsync -az --delete --exclude node_modules --exclude .next --exclude .git \
+  --exclude .env ./ mn@10.0.40.77:/opt/fbmonoy/
+ssh mn@10.0.40.77 'cd /opt/fbmonoy && npm ci && npx prisma migrate deploy && npm run build && sudo systemctl restart fbmonoy'
+```
+
+---
+
+## ວິທີເຮັດເອງເທື່ອລະຂັ້ນ
 
 ### 1. ຕິດຕັ້ງສິ່ງທີ່ຕ້ອງການ
 
