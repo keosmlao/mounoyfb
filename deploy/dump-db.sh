@@ -7,6 +7,8 @@
 # ໄຟລ໌ຖືກເກັບໄວ້ deploy/dump/fbmonoy.sql.gz ຊຶ່ງ **ຢູ່ນອກ git**
 # ເພາະໃນຖານຂໍ້ມູນມີ Facebook access token — ຫ້າມ push ຂຶ້ນ GitHub.
 set -euo pipefail
+# ບໍ່ດັ່ງນັ້ນ pg_dump ລົ້ມ ແຕ່ gzip ສຳເລັດ ແລ້ວຖືວ່າຜ່ານ
+set -o pipefail
 
 cd "$(dirname "$0")/.."
 OUT_DIR="deploy/dump"
@@ -23,9 +25,26 @@ DB_URL="${DB_URL%%\?*}"
 
 mkdir -p "$OUT_DIR"
 
+# ຂຽນໃສ່ໄຟລ໌ຊົ່ວຄາວກ່ອນ ແລ້ວຄ່ອຍຍ້າຍທັບ —
+# ຖ້າຂຽນທັບ $OUT ໂດຍກົງ ແລ້ວ pg_dump ລົ້ມ (ເຊັ່ນ ຕໍ່ເຊີບເວີບໍ່ໄດ້)
+# ໄຟລ໌ສຳຮອງອັນເກົ່າທີ່ດີຢູ່ຈະຫາຍໄປນຳ
+TMP="$(mktemp "${OUT}.XXXXXX")"
+trap 'rm -f "$TMP"' EXIT
+
 # --no-owner / --no-acl : ໃຫ້ restore ເຂົ້າຜູ້ໃຊ້ໃດກໍ່ໄດ້ຢູ່ເຊີບເວີ
-# --clean --if-exists   : ບໍ່ໃສ່ ເພາະ restore ໃສ່ຖານຂໍ້ມູນເປົ່າເທົ່ານັ້ນ
-pg_dump --no-owner --no-acl --format=plain "$DB_URL" | gzip -9 > "$OUT"
+if ! pg_dump --no-owner --no-acl --format=plain "$DB_URL" | gzip -9 > "$TMP"; then
+  echo "✗ ສຳຮອງບໍ່ສຳເລັດ — ໄຟລ໌ເກົ່າ (ຖ້າມີ) ຍັງຢູ່ຄືເກົ່າ" >&2
+  exit 1
+fi
+
+# ກວດວ່າໄດ້ຂໍ້ມູນຈິງ ບໍ່ແມ່ນໄຟລ໌ເປົ່າ
+if [ "$(gunzip -c "$TMP" | grep -c '^CREATE TABLE')" -eq 0 ]; then
+  echo "✗ ສຳຮອງໄດ້ 0 ຕາຕະລາງ — ບໍ່ຂຽນທັບໄຟລ໌ເກົ່າ" >&2
+  exit 1
+fi
+
+mv "$TMP" "$OUT"
+trap - EXIT
 
 SIZE="$(du -h "$OUT" | cut -f1)"
 TABLES="$(gunzip -c "$OUT" | grep -c '^CREATE TABLE' || true)"
