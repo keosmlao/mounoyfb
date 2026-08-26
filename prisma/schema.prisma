@@ -60,6 +60,14 @@ enum SyncStatus {
   FAILED
 }
 
+/// ມິຕິທີ່ Facebook ແຍກຜົນໃຫ້ — ໃຊ້ຫາວ່າກຸ່ມໃດ/ບ່ອນໃດ/ເວລາໃດ ຄຸ້ມທີ່ສຸດ
+enum SegmentKind {
+  AGE_GENDER // ອາຍຸ + ເພດ
+  PLATFORM // FB/IG + ຕຳແໜ່ງ (feed / reels / story)
+  REGION // ແຂວງ
+  HOUR // ຊົ່ວໂມງໃນມື້ (ຕາມເຂດເວລາຂອງບັນຊີ)
+}
+
 // ---------------------------------------------------------------------------
 // ບັນຊີໂຄສະນາ / ເພຈ / ສິນຄ້າ
 // ---------------------------------------------------------------------------
@@ -81,6 +89,7 @@ model AdAccount {
 
   campaigns Campaign[]
   insights  Insight[]
+  segments  SegmentInsight[]
 
   @@index([status])
 }
@@ -147,6 +156,7 @@ model Campaign {
   product   Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
   adSets    AdSet[]
   insights  Insight[]
+  segments  SegmentInsight[]
   leads     Lead[]
 
   @@index([adAccountId])
@@ -259,6 +269,43 @@ model Insight {
   @@index([adAccountId, date])
   @@index([campaignId, date])
   @@index([source])
+}
+
+/// ຜົນແຍກຕາມກຸ່ມ (ອາຍຸ/ເພດ, ບ່ອນວາງ, ແຂວງ, ຊົ່ວໂມງ) — ເກັບແຍກຕາຕະລາງກັບ Insight
+/// **ຢ່າເອົາໄປລວມກັບ Insight** ເພາະເປັນຕົວເລກອັນດຽວກັນທີ່ຖືກຫັ່ນຄົນລະແບບ
+/// (ບວກ AGE_GENDER ກັບ REGION ຈະໄດ້ 2 ເທົ່າ). ໃຊ້ສະເພາະການວິເຄາະພາຍໃນມິຕິດຽວກັນ.
+model SegmentInsight {
+  id          String      @id @default(cuid())
+  date        DateTime    @db.Date
+  kind        SegmentKind
+  /// ຄ່າດິບຈາກ Facebook ເຊັ່ນ "18-24|female", "facebook|feed", "21" — ກະແຈກັນຊ້ຳ
+  segKey      String
+  adAccountId String
+  campaignId  String
+
+  currency    String @default("USD")
+  fxRateToLak Float  @default(1)
+
+  spend       Float @default(0)
+  spendLak    Float @default(0)
+  impressions Int   @default(0)
+  reach       Int   @default(0)
+  clicks      Int   @default(0)
+  linkClicks  Int   @default(0)
+  messages    Int   @default(0)
+  leadsCount  Int   @default(0)
+  purchases   Int   @default(0)
+  revenue     Float @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adAccount AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([date, kind, segKey, campaignId])
+  @@index([kind, date])
+  @@index([campaignId, kind])
 }
 
 // ---------------------------------------------------------------------------

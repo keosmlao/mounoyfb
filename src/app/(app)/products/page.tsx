@@ -3,11 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createProduct } from "./actions";
-import { formatInt, formatLak, formatPercent, safeDiv } from "@/lib/format";
+import { formatInt, formatPercent, safeDiv } from "@/lib/format";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
+  const { money } = await loadMoney();
   const products = await prisma.product.findMany({
     orderBy: { createdAt: "asc" },
     include: { _count: { select: { campaigns: true, leads: true } } },
@@ -54,10 +56,10 @@ export default async function ProductsPage() {
                           ) : null}
                         </td>
                         <td className="text-[var(--fg-muted)]">{p.sku ?? "—"}</td>
-                        <td className="num">{formatLak(p.price)}</td>
-                        <td className="num">{formatLak(p.cost)}</td>
+                        <td className="num">{money(p.price)}</td>
+                        <td className="num">{money(p.cost)}</td>
                         <td className="num">
-                          {formatLak(margin)}
+                          {money(margin)}
                           <span className="ml-1 text-xs text-[var(--fg-subtle)]">
                             ({formatPercent(safeDiv(margin, p.price), 0)})
                           </span>

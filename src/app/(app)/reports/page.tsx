@@ -3,7 +3,8 @@ import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { DateRangeBar } from "@/components/DateRangeBar";
 import { resolveRange } from "@/lib/date";
 import { buildReport, GROUP_BYS, type GroupBy } from "@/lib/report";
-import { formatCompact, formatLak, formatPercent } from "@/lib/format";
+import { formatCompact, formatPercent } from "@/lib/format";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<Search>;
 }) {
+  const { money } = await loadMoney();
   const sp = await searchParams;
   const range = resolveRange(sp);
   const groupBy = (
@@ -104,24 +106,24 @@ export default async function ReportsPage({
                         r.label
                       )}
                     </td>
-                    <td className="num">{formatLak(r.spendLak)}</td>
+                    <td className="num">{money(r.spendLak)}</td>
                     <td className="num">{formatCompact(r.impressions)}</td>
                     <td className="num">{formatCompact(r.reach)}</td>
                     <td className="num">{formatCompact(r.clicks)}</td>
                     <td className="num">{formatPercent(r.ctr)}</td>
-                    <td className="num">{r.clicks ? formatLak(r.cpc) : "—"}</td>
+                    <td className="num">{r.clicks ? money(r.cpc) : "—"}</td>
                     <td className="num">
-                      {r.impressions ? formatLak(r.cpm) : "—"}
+                      {r.impressions ? money(r.cpm) : "—"}
                     </td>
                     <td className="num">{formatCompact(r.messages)}</td>
                     <td className="num">
-                      {r.messages ? formatLak(r.costPerMessage) : "—"}
+                      {r.messages ? money(r.costPerMessage) : "—"}
                     </td>
                     <td className="num">{formatCompact(r.purchases)}</td>
                     <td className="num">
-                      {r.purchases ? formatLak(r.costPerPurchase) : "—"}
+                      {r.purchases ? money(r.costPerPurchase) : "—"}
                     </td>
-                    <td className="num">{formatLak(r.revenue)}</td>
+                    <td className="num">{money(r.revenue)}</td>
                     <td
                       className={`num ${
                         r.profit >= 0
@@ -129,7 +131,7 @@ export default async function ReportsPage({
                           : "text-[var(--danger)]"
                       }`}
                     >
-                      {formatLak(r.profit)}
+                      {money(r.profit)}
                     </td>
                     <td className="num">
                       {r.spendLak ? `${r.roas.toFixed(2)}x` : "—"}
@@ -141,7 +143,7 @@ export default async function ReportsPage({
                 <tr className="font-semibold">
                   <td className="border-t-2 border-[var(--border-strong)]">ລວມ</td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {formatLak(totals.spendLak)}
+                    {money(totals.spendLak)}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
                     {formatCompact(totals.impressions)}
@@ -156,25 +158,25 @@ export default async function ReportsPage({
                     {formatPercent(totals.ctr)}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {totals.clicks ? formatLak(totals.cpc) : "—"}
+                    {totals.clicks ? money(totals.cpc) : "—"}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {totals.impressions ? formatLak(totals.cpm) : "—"}
+                    {totals.impressions ? money(totals.cpm) : "—"}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
                     {formatCompact(totals.messages)}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {totals.messages ? formatLak(totals.costPerMessage) : "—"}
+                    {totals.messages ? money(totals.costPerMessage) : "—"}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
                     {formatCompact(totals.purchases)}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {totals.purchases ? formatLak(totals.costPerPurchase) : "—"}
+                    {totals.purchases ? money(totals.costPerPurchase) : "—"}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {formatLak(totals.revenue)}
+                    {money(totals.revenue)}
                   </td>
                   <td
                     className={`num border-t-2 border-[var(--border-strong)] ${
@@ -183,7 +185,7 @@ export default async function ReportsPage({
                         : "text-[var(--danger)]"
                     }`}
                   >
-                    {formatLak(totals.profit)}
+                    {money(totals.profit)}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
                     {totals.spendLak ? `${totals.roas.toFixed(2)}x` : "—"}

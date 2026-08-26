@@ -4,9 +4,10 @@ import { Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { DeleteButton, SubmitButton } from "@/components/SubmitButton";
 import { deleteInsight, saveDailyInsights } from "./actions";
 import { addDays, formatDateLao, parseDate, todayStr } from "@/lib/date";
-import { formatCompact, formatLak } from "@/lib/format";
+import { formatCompact } from "@/lib/format";
 import { LEVEL_LABEL, SOURCE_LABEL } from "@/lib/labels";
 import type { EntityStatus } from "@/generated/prisma/enums";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export default async function InsightsPage({
 }: {
   searchParams: Promise<Search>;
 }) {
+  const { money } = await loadMoney();
   const sp = await searchParams;
   const dateStr = sp.date ?? addDays(todayStr(), -1); // ປົກກະຕິບັນທຶກຜົນຂອງມື້ວານ
   const date = parseDate(dateStr);
@@ -152,9 +154,9 @@ export default async function InsightsPage({
       <Card className="mb-5">
         <CardHeader
           title={`ຕາຕະລາງປ້ອນຂໍ້ມູນ — ${formatDateLao(dateStr)}`}
-          subtitle={`ວັນນີ້ບັນທຶກແລ້ວ ${existing.length} ແຄມເປນ · ຄ່າໂຄສະນາ ${formatLak(
+          subtitle={`ວັນນີ້ບັນທຶກແລ້ວ ${existing.length} ແຄມເປນ · ຄ່າໂຄສະນາ ${money(
             dayTotal.spendLak,
-          )} · ທັກແຊັດ ${formatCompact(dayTotal.messages)} · ຍອດຂາຍ ${formatLak(
+          )} · ທັກແຊັດ ${formatCompact(dayTotal.messages)} · ຍອດຂາຍ ${money(
             dayTotal.revenue,
           )}`}
         />
@@ -290,12 +292,12 @@ export default async function InsightsPage({
                       <td>{formatDateLao(r.date)}</td>
                       <td className="text-xs">{LEVEL_LABEL[r.level]}</td>
                       <td className="max-w-56 truncate">{target}</td>
-                      <td className="num">{formatLak(r.spendLak)}</td>
+                      <td className="num">{money(r.spendLak)}</td>
                       <td className="num">{formatCompact(r.impressions)}</td>
                       <td className="num">{formatCompact(r.clicks)}</td>
                       <td className="num">{r.messages}</td>
                       <td className="num">{r.purchases}</td>
-                      <td className="num">{formatLak(r.revenue)}</td>
+                      <td className="num">{money(r.revenue)}</td>
                       <td className="text-xs text-[var(--fg-muted)]">
                         {SOURCE_LABEL[r.source]}
                       </td>

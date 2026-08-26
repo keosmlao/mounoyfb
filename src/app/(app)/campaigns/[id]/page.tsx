@@ -24,7 +24,7 @@ import {
   toDateInput,
 } from "@/lib/date";
 import { aggregate, groupTotals } from "@/lib/metrics";
-import { formatCompact, formatLak, formatPercent } from "@/lib/format";
+import { formatCompact, formatPercent } from "@/lib/format";
 import {
   OBJECTIVE_LABEL,
   SOURCE_LABEL,
@@ -33,6 +33,7 @@ import {
   options,
 } from "@/lib/labels";
 import { totalsScope } from "@/lib/scope";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default async function CampaignDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ from?: string; to?: string; preset?: string }>;
 }) {
+  const { money, currency, rate } = await loadMoney();
   const { id } = await params;
   const sp = await searchParams;
   const range = resolveRange(sp);
@@ -146,7 +148,7 @@ export default async function CampaignDetailPage({
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="ຄ່າໂຄສະນາ"
-          value={formatLak(total.spendLak)}
+          value={money(total.spendLak)}
           current={total.spendLak}
           previous={prevTotal.spendLak}
           upIsGood={false}
@@ -159,7 +161,7 @@ export default async function CampaignDetailPage({
         />
         <StatTile
           label="ຄ່າຕໍ່ 1 ຄົນທັກ"
-          value={total.messages ? formatLak(total.costPerMessage) : "—"}
+          value={total.messages ? money(total.costPerMessage) : "—"}
           current={total.costPerMessage}
           previous={prevTotal.costPerMessage}
           upIsGood={false}
@@ -169,7 +171,7 @@ export default async function CampaignDetailPage({
           value={total.spendLak ? `${total.roas.toFixed(2)}x` : "—"}
           current={total.roas}
           previous={prevTotal.roas}
-          hint={`ຍອດຂາຍ ${formatLak(total.revenue)}`}
+          hint={`ຍອດຂາຍ ${money(total.revenue)}`}
         />
       </div>
 
@@ -179,6 +181,8 @@ export default async function CampaignDetailPage({
           subtitle="ທັງສອງເສັ້ນເປັນສະກຸນກີບ ຈຶ່ງໃຊ້ແກນດຽວກັນ"
         />
         <TrendChart
+          currency={currency}
+          fxRate={rate}
           labels={labels}
           series={[
             { name: "ຄ່າໂຄສະນາ", color: "var(--chart-1)", values: spendSeries },
@@ -233,7 +237,7 @@ export default async function CampaignDetailPage({
                             </Badge>
                           </td>
                           <td className="num">{s._count.ads}</td>
-                          <td className="num">{formatLak(sum?.spendLak ?? 0)}</td>
+                          <td className="num">{money(sum?.spendLak ?? 0)}</td>
                           <td className="num">{formatCompact(sum?.messages ?? 0)}</td>
                           <td className="num">
                             <Link href={`/ad-sets/${s.id}`} className="btn btn-sm">
@@ -284,7 +288,7 @@ export default async function CampaignDetailPage({
                     {[...rows].reverse().map((r) => (
                       <tr key={r.id}>
                         <td>{formatDateLao(r.date)}</td>
-                        <td className="num">{formatLak(r.spendLak)}</td>
+                        <td className="num">{money(r.spendLak)}</td>
                         <td className="num">{formatCompact(r.impressions)}</td>
                         <td className="num">{formatCompact(r.clicks)}</td>
                         <td className="num">
@@ -292,7 +296,7 @@ export default async function CampaignDetailPage({
                         </td>
                         <td className="num">{r.messages}</td>
                         <td className="num">{r.purchases}</td>
-                        <td className="num">{formatLak(r.revenue)}</td>
+                        <td className="num">{money(r.revenue)}</td>
                         <td className="text-xs text-[var(--fg-muted)]">
                           {SOURCE_LABEL[r.source]}
                         </td>

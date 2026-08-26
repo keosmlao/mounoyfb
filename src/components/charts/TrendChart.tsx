@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { formatCompact, formatInt, formatLak } from "@/lib/format";
+import { formatCompact, formatInt } from "@/lib/format";
+import { DEFAULT_FX_RATE, makeMoney, type DisplayCurrency } from "@/lib/money";
 
 /**
  * ຮູບແບບການສະແດງຄ່າ — ສົ່ງເປັນ string ບໍ່ແມ່ນ function
@@ -9,8 +10,7 @@ import { formatCompact, formatInt, formatLak } from "@/lib/format";
  */
 export type ValueFormat = "lak" | "int" | "compact";
 
-const FORMATTERS: Record<ValueFormat, (value: number) => string> = {
-  lak: formatLak,
+const PLAIN: Record<Exclude<ValueFormat, "lak">, (value: number) => string> = {
   int: formatInt,
   compact: formatCompact,
 };
@@ -34,14 +34,23 @@ export function TrendChart({
   series,
   valueFormat = "lak",
   emptyText = "ຍັງບໍ່ມີຂໍ້ມູນໃນຊ່ວງນີ້",
+  currency = "LAK",
+  fxRate = DEFAULT_FX_RATE,
 }: {
   labels: string[];
   series: TrendSeries[];
   valueFormat?: ValueFormat;
   emptyText?: string;
+  /** ສະກຸນທີ່ສະແດງ — ຄ່າທີ່ສົ່ງມາເປັນກີບສະເໝີ ແລ້ວແປງຢູ່ບ່ອນນີ້ */
+  currency?: DisplayCurrency;
+  fxRate?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const format = FORMATTERS[valueFormat];
+  const format = useMemo(
+    () =>
+      valueFormat === "lak" ? makeMoney(currency, fxRate) : PLAIN[valueFormat],
+    [valueFormat, currency, fxRate],
+  );
 
   const { ticks, plotW, plotH, xOf, yOf } = useMemo(() => {
     const all = series.flatMap((s) => s.values);

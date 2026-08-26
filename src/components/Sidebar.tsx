@@ -14,6 +14,7 @@ const NAV: NavGroup[] = [
     items: [
       { href: "/", label: "ໜ້າຫຼັກ", icon: "▦" },
       { href: "/alerts", label: "ການແຈ້ງເຕືອນ", icon: "⚠", badgeKey: "alerts" },
+      { href: "/analysis", label: "ວິເຄາະ", icon: "◈" },
       { href: "/reports", label: "ລາຍງານ", icon: "▤" },
     ],
   },

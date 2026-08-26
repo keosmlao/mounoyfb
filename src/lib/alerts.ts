@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { addDays, parseDate, formatDateLao, todayStr } from "./date";
-import { formatLak, formatMoney, formatPercent, safeDiv } from "./format";
+import { formatMoney, formatPercent, safeDiv } from "./format";
+import { loadMoney } from "./money-server";
 import { totalsScope } from "./scope";
 
 /**
@@ -96,6 +97,7 @@ export async function getThresholds(): Promise<Thresholds> {
 
 /** ຄິດການແຈ້ງເຕືອນທັງໝົດ ຮຽງຕາມຄວາມຮ້າຍແຮງ */
 export async function buildAlerts(): Promise<Alert[]> {
+  const { money } = await loadMoney();
   const thresholds = await getThresholds();
   const today = todayStr();
   const yesterday = addDays(today, -1);
@@ -227,9 +229,9 @@ export async function buildAlerts(): Promise<Alert[]> {
           severity: roas < thresholds.roasMin / 2 ? "serious" : "warning",
           category: "ຜົນຕອບແທນ",
           title: `ROAS ຕ່ຳກວ່າເປົ້າ: ${campaign.name}`,
-          detail: `7 ວັນຫຼ້າສຸດ ROAS ${roas.toFixed(2)}x (ເປົ້າ ${thresholds.roasMin}x) · ໃຊ້ ${formatLak(
+          detail: `7 ວັນຫຼ້າສຸດ ROAS ${roas.toFixed(2)}x (ເປົ້າ ${thresholds.roasMin}x) · ໃຊ້ ${money(
             week.spendLak,
-          )} ໄດ້ຍອດຂາຍ ${formatLak(week.revenue)}`,
+          )} ໄດ້ຍອດຂາຍ ${money(week.revenue)}`,
           href,
         });
       }
@@ -244,7 +246,7 @@ export async function buildAlerts(): Promise<Alert[]> {
           severity: "warning",
           category: "ຕົ້ນທຶນ",
           title: `ຄ່າຕໍ່ຄົນທັກສູງ: ${campaign.name}`,
-          detail: `7 ວັນຫຼ້າສຸດ ${formatLak(costPerMessage)} ຕໍ່ 1 ຄົນ (ຕັ້ງເພດານໄວ້ ${formatLak(
+          detail: `7 ວັນຫຼ້າສຸດ ${money(costPerMessage)} ຕໍ່ 1 ຄົນ (ຕັ້ງເພດານໄວ້ ${money(
             thresholds.costPerMessageMax,
           )})`,
           href,

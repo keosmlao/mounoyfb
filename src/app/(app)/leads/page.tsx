@@ -6,7 +6,7 @@ import { StatTile } from "@/components/StatTile";
 import { DateRangeBar } from "@/components/DateRangeBar";
 import { createLead, setLeadStatus } from "./actions";
 import { formatDateLao, parseDate, resolveRange, todayStr } from "@/lib/date";
-import { formatInt, formatLak, formatPercent, safeDiv } from "@/lib/format";
+import { formatInt, formatPercent, safeDiv } from "@/lib/format";
 import {
   LEAD_CHANNELS,
   LEAD_STATUS_LABEL,
@@ -14,6 +14,7 @@ import {
   options,
 } from "@/lib/labels";
 import type { LeadStatus } from "@/generated/prisma/enums";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function LeadsPage({
 }: {
   searchParams: Promise<Search>;
 }) {
+  const { money } = await loadMoney();
   const sp = await searchParams;
   const range = resolveRange(sp);
 
@@ -98,7 +100,7 @@ export default async function LeadsPage({
           value={formatInt(won)}
           hint={`ອັດຕາປິດ ${formatPercent(safeDiv(won, total), 1)}`}
         />
-        <StatTile label="ຍອດຂາຍລວມ" value={formatLak(wonAmount)} hint="ຈາກລູກຄ້າທີ່ປິດແລ້ວ" />
+        <StatTile label="ຍອດຂາຍລວມ" value={money(wonAmount)} hint="ຈາກລູກຄ້າທີ່ປິດແລ້ວ" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -199,7 +201,7 @@ export default async function LeadsPage({
                             )}
                           </td>
                           <td className="num">
-                            {lead.amount ? formatLak(lead.amount) : "—"}
+                            {lead.amount ? money(lead.amount) : "—"}
                           </td>
                           <td>
                             <form action={changeStatus} className="flex gap-1">

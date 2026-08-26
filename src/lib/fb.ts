@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { chunkRange, countDays, parseDate, type DateRange } from "./date";
-import { InsightLevel, type EntityStatus } from "@/generated/prisma/enums";
+import { InsightLevel, SegmentKind, type EntityStatus } from "@/generated/prisma/enums";
+import { SEGMENT_DEFS, buildSegKey } from "./segments";
 
 /**
  * ຕົວເຊື່ອມກັບ Facebook Marketing API.
@@ -23,12 +24,15 @@ export type SyncLevels = {
   campaign: boolean;
   adset: boolean;
   ad: boolean;
+  /** ດຶງຜົນແຍກກຸ່ມ (ອາຍຸ/ບ່ອນວາງ/ແຂວງ/ຊົ່ວໂມງ) — ໃຊ້ໃນໜ້າວິເຄາະ */
+  segments: boolean;
 };
 
 export const DEFAULT_SYNC_LEVELS: SyncLevels = {
   campaign: true,
   adset: false,
   ad: false,
+  segments: true,
 };
 
 export type SyncResult = {
@@ -36,6 +40,7 @@ export type SyncResult = {
   adSets: number;
   ads: number;
   insights: number;
+  segments: number;
 };
 
 /** ອ່ານ token ຈາກຖານຂໍ້ມູນກ່ອນ ຖ້າບໍ່ມີຈຶ່ງໃຊ້ຄ່າຈາກ .env */
@@ -669,6 +674,87 @@ async function pullInsights(
   }
 }
 
+/**
+ * ດຶງຜົນແຍກກຸ່ມ 1 ມິຕິ ຂອງ 1 ບັນຊີ ໃນຊ່ວງວັນທີ່ກຳນົດ.
+ * ເກັບລົງຕາຕະລາງ SegmentInsight ຕ່າງຫາກ ຈຶ່ງບໍ່ກະທົບຍອດລວມຂອງລະບົບ.
+ */
+async function pullSegments(
+  config: FbConfig,
+  ctx: AccountContext,
+  range: DateRange,
+  defaultFx: number,
+  result: SyncResult,
+) {
+  const { account, campaignByFbId, fxCache } = ctx;
+
+  for (const def of SEGMENT_DEFS) {
+    const rows = await graphAll<FbInsight & Record<string, unknown>>(
+      config,
+      `${account.fbAccountId}/insights`,
+      {
+        level: "campaign",
+        time_increment: "1",
+        breakdowns: def.breakdowns,
+        time_range: JSON.stringify({ since: range.from, until: range.to }),
+        fields:
+          "date_start,campaign_id,spend,impressions,reach,clicks,inline_link_clicks,actions,action_values",
+      },
+    );
+
+    for (const row of rows) {
+      const campaignId = row.campaign_id
+        ? (campaignByFbId.get(row.campaign_id) ?? null)
+        : null;
+      if (!campaignId) continue;
+
+      const segKey = buildSegKey(def, row);
+      if (!segKey) continue;
+
+      const date = parseDate(row.date_start);
+      const fxKey = `${row.date_start}:${account.currency}`;
+      let rate = fxCache.get(fxKey);
+      if (rate === undefined) {
+        rate = await fxRateFor(date, account.currency, defaultFx);
+        fxCache.set(fxKey, rate);
+      }
+
+      const spend = Number(row.spend) || 0;
+      const data = {
+        adAccountId: account.id,
+        campaignId,
+        currency: account.currency,
+        fxRateToLak: rate,
+        spend,
+        spendLak: Math.round(spend * rate),
+        impressions: Number(row.impressions) || 0,
+        reach: Number(row.reach) || 0,
+        clicks: Number(row.clicks) || 0,
+        linkClicks: Number(row.inline_link_clicks) || 0,
+        messages: actionValue(row.actions, MESSAGE_ACTIONS),
+        leadsCount: actionValue(row.actions, LEAD_ACTIONS),
+        purchases: actionValue(row.actions, PURCHASE_ACTIONS),
+        revenue: Math.round(
+          actionValue(row.action_values, PURCHASE_ACTIONS) * rate,
+        ),
+      };
+
+      await prisma.segmentInsight.upsert({
+        where: {
+          date_kind_segKey_campaignId: {
+            date,
+            kind: def.kind as SegmentKind,
+            segKey,
+            campaignId,
+          },
+        },
+        create: { date, kind: def.kind as SegmentKind, segKey, ...data },
+        update: data,
+      });
+      result.segments++;
+    }
+  }
+}
+
 /** ຄວາມຄືບໜ້າທີ່ລາຍງານກັບຫຼັງແຕ່ລະທ່ອນອາທິດ */
 export type SyncProgress = {
   doneDays: number;
@@ -707,7 +793,7 @@ export async function syncFromFacebook(
   });
   const defaultFx = Number(fxSetting?.value) || 21700;
 
-  const result: SyncResult = { campaigns: 0, adSets: 0, ads: 0, insights: 0 };
+  const result: SyncResult = { campaigns: 0, adSets: 0, ads: 0, insights: 0, segments: 0 };
 
   // 1) ໂຄງສ້າງ — ດຶງເທື່ອດຽວຕໍ່ບັນຊີ ເພາະບໍ່ຂຶ້ນກັບຊ່ວງວັນ
   const contexts: AccountContext[] = [];
@@ -729,6 +815,9 @@ export async function syncFromFacebook(
       }
       if (levels.ad) {
         await pullInsights(config, ctx, chunk, InsightLevel.AD, defaultFx, result);
+      }
+      if (levels.segments) {
+        await pullSegments(config, ctx, chunk, defaultFx, result);
       }
     }
 
@@ -894,7 +983,8 @@ export async function runSyncJob(
         doneDays: countDays(range),
         message:
           `ແຄມເປນ ${result.campaigns} · ຊຸດ ${result.adSets} · ໂຄສະນາ ${result.ads} · ` +
-          `ຜົນລາຍວັນ ${result.insights} ແຖວ (${range.from} — ${range.to})`,
+          `ຜົນລາຍວັນ ${result.insights} ແຖວ · ແຍກກຸ່ມ ${result.segments} ແຖວ ` +
+          `(${range.from} — ${range.to})`,
       },
     });
     return result;

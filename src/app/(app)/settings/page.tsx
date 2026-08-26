@@ -14,6 +14,7 @@ import { SyncProgress } from "@/components/SyncProgress";
 import { addDays, formatDateLao, todayStr } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
+import { DISPLAY_CURRENCIES, DISPLAY_CURRENCY_LABEL } from "@/lib/money";
 import { activeSyncLog } from "@/lib/fb";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,23 @@ export default async function SettingsPage() {
         <Card className="h-fit">
           <CardHeader title="ຄ່າທົ່ວໄປ" />
           <form action={saveSettings} className="grid gap-4 p-4">
+            <Field
+              label="ສະກຸນເງິນທີ່ສະແດງ"
+              hint="ຂໍ້ມູນເກັບເປັນກີບສະເໝີ — ອັນນີ້ປ່ຽນແຕ່ການສະແດງຜົນ ສະຫຼັບກັບໄດ້ທຸກເມື່ອ"
+            >
+              <select
+                name="displayCurrency"
+                defaultValue={map.get("displayCurrency") ?? "LAK"}
+                className="field"
+              >
+                {DISPLAY_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {DISPLAY_CURRENCY_LABEL[c]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <Field label="ຊື່ບໍລິສັດ">
               <input
                 name="companyName"
@@ -178,6 +196,15 @@ export default async function SettingsPage() {
                   <label className="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="levelAd" className="h-4 w-4" />
                     ຊິ້ນໂຄສະນາ
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="levelSegments"
+                      defaultChecked
+                      className="h-4 w-4"
+                    />
+                    ຜົນແຍກກຸ່ມ (ໜ້າວິເຄາະ)
                   </label>
                 </div>
                 <p className="mt-1.5 text-xs text-[var(--fg-subtle)]">

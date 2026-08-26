@@ -15,11 +15,14 @@ import {
   toDateInput,
 } from "@/lib/date";
 import { aggregate, derive, groupTotals } from "@/lib/metrics";
-import { formatCompact, formatLak, formatPercent } from "@/lib/format";
+import { formatCompact, formatPercent } from "@/lib/format";
 import { LEAD_STATUS_LABEL, LEAD_STATUS_TONE } from "@/lib/labels";
 import { totalsScope } from "@/lib/scope";
 import { AlertList } from "@/components/AlertList";
 import { buildAlerts, countActionable } from "@/lib/alerts";
+import { AdviceList } from "@/components/AdviceList";
+import { actionable, buildAdvice } from "@/lib/advice";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,7 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string; preset?: string }>;
 }) {
+  const { money, currency, rate } = await loadMoney();
   const sp = await searchParams;
   const range = resolveRange(sp);
   const prev = previousRange(range);
@@ -87,6 +91,7 @@ export default async function DashboardPage({
 
   const total = aggregate(rows);
   const prevTotal = aggregate(prevRows);
+  const topAdvice = actionable(await buildAdvice(range)).slice(0, 3);
   const [activeCampaigns, newLeads] = counts;
 
   // ---- ຂໍ້ມູນລາຍວັນສຳລັບກຣາຟ
@@ -112,7 +117,7 @@ export default async function DashboardPage({
     label: c.name,
     href: `/campaigns/${c.id}`,
     value: c.spendLak,
-    display: formatLak(c.spendLak),
+    display: money(c.spendLak),
     sub: c.spendLak ? `ROAS ${c.roas.toFixed(2)}x` : undefined,
   }));
 
@@ -138,6 +143,21 @@ export default async function DashboardPage({
           </>
         }
       />
+
+      {topAdvice.length > 0 ? (
+        <Card className="mb-5">
+          <CardHeader
+            title="ຄວນເຮັດຫຍັງຕໍ່"
+            subtitle="ຄິດຈາກຜົນແຍກກຸ່ມຂອງຊ່ວງທີ່ເລືອກ"
+            action={
+              <Link href="/analysis" className="btn btn-sm">
+                ເບິ່ງການວິເຄາະ
+              </Link>
+            }
+          />
+          <AdviceList advice={topAdvice} />
+        </Card>
+      ) : null}
 
       {alerts.length > 0 ? (
         <Card className="mb-5">
@@ -167,7 +187,7 @@ export default async function DashboardPage({
               total.profit >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
             }`}
           >
-            {formatLak(total.profit)}
+            {money(total.profit)}
           </p>
           <p className="mt-2 text-sm text-[var(--fg-muted)]">
             {formatDateLao(range.from)} — {formatDateLao(range.to)}
@@ -182,11 +202,11 @@ export default async function DashboardPage({
           </div>
           <div>
             <dt className="text-xs text-[var(--fg-muted)]">ຄ່າໂຄສະນາ</dt>
-            <dd className="text-xl font-semibold">{formatLak(total.spendLak)}</dd>
+            <dd className="text-xl font-semibold">{money(total.spendLak)}</dd>
           </div>
           <div>
             <dt className="text-xs text-[var(--fg-muted)]">ຍອດຂາຍ</dt>
-            <dd className="text-xl font-semibold">{formatLak(total.revenue)}</dd>
+            <dd className="text-xl font-semibold">{money(total.revenue)}</dd>
           </div>
         </dl>
       </Card>
@@ -194,7 +214,7 @@ export default async function DashboardPage({
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile
           label="ຄ່າໂຄສະນາ"
-          value={formatLak(total.spendLak)}
+          value={money(total.spendLak)}
           current={total.spendLak}
           previous={prevTotal.spendLak}
           upIsGood={false}
@@ -209,7 +229,7 @@ export default async function DashboardPage({
         />
         <StatTile
           label="ຄ່າຕໍ່ 1 ຄົນທັກ"
-          value={total.messages ? formatLak(total.costPerMessage) : "—"}
+          value={total.messages ? money(total.costPerMessage) : "—"}
           current={total.costPerMessage}
           previous={prevTotal.costPerMessage}
           upIsGood={false}
@@ -223,7 +243,7 @@ export default async function DashboardPage({
         />
         <StatTile
           label="ຄ່າຕໍ່ 1 ອໍເດີ"
-          value={total.purchases ? formatLak(total.costPerPurchase) : "—"}
+          value={total.purchases ? money(total.costPerPurchase) : "—"}
           current={total.costPerPurchase}
           previous={prevTotal.costPerPurchase}
           upIsGood={false}
@@ -254,6 +274,8 @@ export default async function DashboardPage({
           subtitle="ທັງສອງເສັ້ນເປັນສະກຸນກີບ ຈຶ່ງໃຊ້ແກນດຽວກັນ"
         />
         <TrendChart
+          currency={currency}
+          fxRate={rate}
           labels={labels}
           series={[
             { name: "ຄ່າໂຄສະນາ", color: "var(--chart-1)", values: spendSeries },
@@ -307,10 +329,10 @@ export default async function DashboardPage({
                           {c.name}
                         </Link>
                       </td>
-                      <td className="num">{formatLak(c.spendLak)}</td>
-                      <td className="num">{formatLak(c.revenue)}</td>
+                      <td className="num">{money(c.spendLak)}</td>
+                      <td className="num">{money(c.revenue)}</td>
                       <td className="num text-[var(--danger)]">
-                        {formatLak(c.profit)}
+                        {money(c.profit)}
                       </td>
                       <td className="num">{c.roas.toFixed(2)}x</td>
                     </tr>
@@ -355,7 +377,7 @@ export default async function DashboardPage({
                         {lead.campaign?.name ?? "—"}
                       </td>
                       <td className="num">
-                        {lead.amount ? formatLak(lead.amount) : "—"}
+                        {lead.amount ? money(lead.amount) : "—"}
                       </td>
                       <td>
                         <Badge tone={LEAD_STATUS_TONE[lead.status]}>

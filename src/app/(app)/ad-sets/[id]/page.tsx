@@ -19,7 +19,8 @@ import {
 import { saveSingleInsight } from "@/app/(app)/insights/actions";
 import { CREATIVE_TYPES, STATUS_LABEL, STATUS_TONE, options } from "@/lib/labels";
 import { addDays, toDateInput, todayStr } from "@/lib/date";
-import { formatCompact, formatLak } from "@/lib/format";
+import { formatCompact } from "@/lib/format";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function AdSetDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { money } = await loadMoney();
   const { id } = await params;
   const adSet = await prisma.adSet.findUnique({
     where: { id },
@@ -121,7 +123,7 @@ export default async function AdSetDetailPage({
                               {STATUS_LABEL[ad.status]}
                             </Badge>
                           </td>
-                          <td className="num">{formatLak(sum?.spendLak ?? 0)}</td>
+                          <td className="num">{money(sum?.spendLak ?? 0)}</td>
                           <td className="num">{formatCompact(sum?.clicks ?? 0)}</td>
                           <td className="num">
                             <form action={removeAd}>

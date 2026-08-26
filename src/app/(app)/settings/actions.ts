@@ -31,6 +31,10 @@ async function put(key: string, value: string | null) {
 export async function saveSettings(fd: FormData) {
   await requireSession();
   await put("companyName", str(fd, "companyName"));
+  await put(
+    "displayCurrency",
+    str(fd, "displayCurrency") === "USD" ? "USD" : "LAK",
+  );
   await put("defaultFxRateToLak", String(num(fd, "defaultFxRateToLak") ?? 21700));
   await put("fbApiVersion", str(fd, "fbApiVersion"));
 
@@ -39,7 +43,7 @@ export async function saveSettings(fd: FormData) {
   if (token) await put("fbAccessToken", token);
   if (str(fd, "clearToken") === "1") await put("fbAccessToken", null);
 
-  revalidatePath("/settings");
+  revalidatePath("/", "layout");
 }
 
 /** ຜົນການທົດສອບ/ນຳເຂົ້າ ທີ່ສົ່ງກັບໄປໃຫ້ໜ້າຈໍສະແດງ */
@@ -144,6 +148,7 @@ export async function runFacebookSync(fd: FormData) {
     campaign: bool(fd, "levelCampaign"),
     adset: bool(fd, "levelAdset"),
     ad: bool(fd, "levelAd"),
+    segments: bool(fd, "levelSegments"),
   };
   // ຢ່າງໜ້ອຍຕ້ອງມີ 1 ລະດັບ ບໍ່ດັ່ງນັ້ນການກົດຈະບໍ່ໄດ້ຫຍັງເລີຍ
   if (!levels.campaign && !levels.adset && !levels.ad) levels.campaign = true;

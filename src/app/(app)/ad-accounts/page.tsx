@@ -4,12 +4,14 @@ import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui
 import { AdAccountForm } from "@/components/AdAccountForm";
 import { createAdAccount } from "./actions";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
-import { formatInt, formatLak } from "@/lib/format";
+import { formatInt } from "@/lib/format";
 import { totalsScope } from "@/lib/scope";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdAccountsPage() {
+  const { money } = await loadMoney();
   const accounts = await prisma.adAccount.findMany({
     orderBy: { createdAt: "asc" },
     include: {
@@ -75,7 +77,7 @@ export default async function AdAccountsPage() {
                         </td>
                         <td>{a.currency}</td>
                         <td className="num">{formatInt(a._count.campaigns)}</td>
-                        <td className="num">{formatLak(stat?.spendLak ?? 0)}</td>
+                        <td className="num">{money(stat?.spendLak ?? 0)}</td>
                         <td>
                           <Badge tone={STATUS_TONE[a.status]}>
                             {STATUS_LABEL[a.status]}

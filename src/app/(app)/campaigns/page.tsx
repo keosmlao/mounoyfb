@@ -4,7 +4,7 @@ import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui
 import { DateRangeBar } from "@/components/DateRangeBar";
 import { parseDate, resolveRange } from "@/lib/date";
 import { derive, EMPTY_TOTALS, type Totals } from "@/lib/metrics";
-import { formatCompact, formatLak, formatPercent } from "@/lib/format";
+import { formatCompact, formatPercent } from "@/lib/format";
 import {
   OBJECTIVE_LABEL,
   STATUS_LABEL,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/labels";
 import type { EntityStatus } from "@/generated/prisma/enums";
 import { totalsScope } from "@/lib/scope";
+import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function CampaignsPage({
 }: {
   searchParams: Promise<Search>;
 }) {
+  const { money } = await loadMoney();
   const sp = await searchParams;
   const range = resolveRange(sp);
 
@@ -215,16 +217,16 @@ export default async function CampaignsPage({
                           {STATUS_LABEL[c.status]}
                         </Badge>
                       </td>
-                      <td className="num">{formatLak(d.spendLak)}</td>
+                      <td className="num">{money(d.spendLak)}</td>
                       <td className="num">{formatCompact(d.impressions)}</td>
                       <td className="num">{formatCompact(d.clicks)}</td>
                       <td className="num">{formatPercent(d.ctr)}</td>
                       <td className="num">{formatCompact(d.messages)}</td>
                       <td className="num">
-                        {d.messages ? formatLak(d.costPerMessage) : "—"}
+                        {d.messages ? money(d.costPerMessage) : "—"}
                       </td>
                       <td className="num">{formatCompact(d.purchases)}</td>
-                      <td className="num">{formatLak(d.revenue)}</td>
+                      <td className="num">{money(d.revenue)}</td>
                       <td className="num">
                         <span
                           className={
