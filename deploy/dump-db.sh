@@ -40,5 +40,5 @@ cat <<EOF
     ຢູ່ນອກ git ແລ້ວ — ສົ່ງຜ່ານ rsync/scp ເທົ່ານັ້ນ ຢ່າແນບທາງແຊັດ
 
 ຂັ້ນຕໍ່ໄປ — ສົ່ງຂຶ້ນເຊີບເວີ:
-  rsync -az deploy/dump/ mn@10.0.40.77:/opt/fbmonoy/deploy/dump/
+  rsync -az deploy/dump/ ຜູ້ໃຊ້@ເຊີບເວີ:/ບ່ອນທີ່ວາງໂຄດ/deploy/dump/
 EOF

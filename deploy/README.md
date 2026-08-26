@@ -1,6 +1,15 @@
 # ຕິດຕັ້ງ FBMONOY ຢູ່ເຊີບເວີ
 
-ເປົ້າໝາຍ: `https://mounoyfb.odienmall.com` → nginx → Next.js (127.0.0.1:3000) → Postgres
+ເປົ້າໝາຍ: `https://ໂດເມນຂອງທ່ານ` → nginx → Next.js (127.0.0.1:3000) → Postgres
+
+ໃສ່ໂດເມນຕອນແລ່ນສະຄຣິບ — ບໍ່ໄດ້ຝັງໄວ້ໃນໂຄດ:
+
+```bash
+sudo DOMAIN=fb.example.com bash deploy/install.sh
+```
+
+ບໍ່ໃສ່ `DOMAIN` ກໍ່ໄດ້ — ຈະຂ້າມ nginx ແລະ HTTPS ໄປ ແອັບຟັງຢູ່ `127.0.0.1:3000`
+ແລ້ວຄ່ອຍແລ່ນຄືນພ້ອມ `DOMAIN` ເມື່ອພ້ອມ
 
 ```
 ອິນເຕີເນັດ ──443──▶ nginx ──▶ 127.0.0.1:3000 ──▶ Postgres (localhost)
@@ -12,7 +21,7 @@
 
 | ລາຍການ | ກວດແນວໃດ |
 |---|---|
-| DNS ສາທາລະນະຊີ້ມາຫາ IP ຂອງເຮົາ | `nslookup mounoyfb.odienmall.com 8.8.8.8` |
+| DNS ສາທາລະນະຊີ້ມາຫາ IP ຂອງເຮົາ | `nslookup ໂດເມນຂອງທ່ານ 8.8.8.8` |
 | Router forward port **80** ແລະ **443** ມາຫາເຊີບເວີ | ບໍ່ດັ່ງນັ້ນ certbot ຈະຢືນຢັນບໍ່ໄດ້ |
 | Node 20+ ແລະ PostgreSQL ຢູ່ເຊີບເວີ | `node -v` · `psql --version` |
 
@@ -24,11 +33,11 @@
 
 ```bash
 # -t ຈຳເປັນ — ບໍ່ດັ່ງນັ້ນ sudo ຢູ່ປາຍທາງຖາມລະຫັດບໍ່ໄດ້
-ssh -t mn@10.0.40.77 'sudo mkdir -p /opt/fbmonoy && sudo chown $USER /opt/fbmonoy'
+ssh -t ຜູ້ໃຊ້@ເຊີບເວີ 'sudo mkdir -p /opt/fbmonoy && sudo chown $USER /opt/fbmonoy'
 
 rsync -az --delete \
   --exclude node_modules --exclude .next --exclude .git --exclude .env \
-  ./ mn@10.0.40.77:/opt/fbmonoy/
+  ./ ຜູ້ໃຊ້@ເຊີບເວີ:/opt/fbmonoy/
 ```
 
 > ຖາມລະຫັດ 3 ເທື່ອ (ssh → sudo → rsync) — ໃຊ້ລະຫັດອັນດຽວກັນໝົດ
@@ -37,7 +46,7 @@ rsync -az --delete \
 
 ```bash
 bash deploy/dump-db.sh
-rsync -az deploy/dump/ mn@10.0.40.77:/opt/fbmonoy/deploy/dump/
+rsync -az deploy/dump/ ຜູ້ໃຊ້@ເຊີບເວີ:/opt/fbmonoy/deploy/dump/
 ```
 
 > ⚠️ ໄຟລ໌ສຳຮອງ **ມີ Facebook access token ຢູ່ຂ້າງໃນ** — ຢູ່ນອກ git ແລ້ວ
@@ -49,8 +58,8 @@ rsync -az deploy/dump/ mn@10.0.40.77:/opt/fbmonoy/deploy/dump/
 **2. ຢູ່ເຊີບເວີ** — ຕິດຕັ້ງທັງໝົດ
 
 ```bash
-ssh mn@10.0.40.77
-cd /opt/fbmonoy && sudo bash deploy/install.sh
+ssh ຜູ້ໃຊ້@ເຊີບເວີ
+cd /opt/fbmonoy && sudo DOMAIN=ໂດເມນຂອງທ່ານ bash deploy/install.sh
 ```
 
 ສະຄຣິບຈະ: ຕິດຕັ້ງ Node/Postgres/nginx/certbot → ສ້າງ DB ແລະ ລະຫັດແບບສຸ່ມ →
@@ -64,8 +73,8 @@ build → ຕັ້ງ systemd → ຕັ້ງ nginx → ຂໍໃບຮັບ�
 
 ```bash
 rsync -az --delete --exclude node_modules --exclude .next --exclude .git \
-  --exclude .env ./ mn@10.0.40.77:/opt/fbmonoy/
-ssh mn@10.0.40.77 'cd /opt/fbmonoy && npm ci && npx prisma migrate deploy && npm run build && sudo systemctl restart fbmonoy'
+  --exclude .env ./ ຜູ້ໃຊ້@ເຊີບເວີ:/opt/fbmonoy/
+ssh ຜູ້ໃຊ້@ເຊີບເວີ 'cd /opt/fbmonoy && npm ci && npx prisma migrate deploy && npm run build && sudo systemctl restart fbmonoy'
 ```
 
 ---
@@ -96,7 +105,7 @@ SQL
 sudo mkdir -p /opt/fbmonoy && sudo chown $USER:$USER /opt/fbmonoy
 # ຈາກເຄື່ອງຕົນເອງ:
 rsync -av --exclude node_modules --exclude .next --exclude .env \
-      ./ mn@10.0.40.77:/opt/fbmonoy/
+      ./ ຜູ້ໃຊ້@ເຊີບເວີ:/opt/fbmonoy/
 ```
 
 ### 4. ຕັ້ງຄ່າ `.env` ຢູ່ເຊີບເວີ
@@ -139,17 +148,17 @@ systemctl status fbmonoy
 
 ```bash
 sudo mkdir -p /var/www/certbot
-sudo cp deploy/nginx-mounoyfb.conf /etc/nginx/sites-available/mounoyfb
-sudo ln -sf /etc/nginx/sites-available/mounoyfb /etc/nginx/sites-enabled/
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/fbmonoy
+sudo ln -sf /etc/nginx/sites-available/fbmonoy /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-ກວດວ່າຜ່ານ http ໄດ້ກ່ອນ: `curl -I http://mounoyfb.odienmall.com`
+ກວດວ່າຜ່ານ http ໄດ້ກ່ອນ: `curl -I http://ໂດເມນຂອງທ່ານ`
 
 ### 8. ໃບຮັບຮອງ HTTPS
 
 ```bash
-sudo certbot --nginx -d mounoyfb.odienmall.com --agree-tos -m ຊື່ອີເມວ --redirect
+sudo certbot --nginx -d ໂດເມນຂອງທ່ານ --agree-tos -m ຊື່ອີເມວ --redirect
 sudo systemctl list-timers | grep certbot   # ຕໍ່ອາຍຸເອງ
 ```
 

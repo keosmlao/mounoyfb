@@ -3,12 +3,14 @@
 # ຕິດຕັ້ງ FBMONOY ຢູ່ເຊີບເວີ Ubuntu/Debian ໃນຮອບດຽວ.
 #
 # ແລ່ນ **ຢູ່ເຊີບເວີ** ຫຼັງຈາກເອົາໂຄດຂຶ້ນໄປແລ້ວ:
-#     cd /opt/fbmonoy && sudo bash deploy/install.sh
+#     cd /opt/fbmonoy && sudo DOMAIN=example.com bash deploy/install.sh
+#
+# ບໍ່ໃສ່ DOMAIN ກໍ່ໄດ້ — ຈະຂ້າມ nginx ແລະ HTTPS ໄປ ແລ້ວແອັບຟັງຢູ່ 127.0.0.1:3000
 #
 # ແລ່ນຊ້ຳໄດ້ — ສິ່ງທີ່ມີແລ້ວຈະຖືກຂ້າມ ບໍ່ແມ່ນສ້າງທັບ.
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-mounoyfb.odienmall.com}"
+DOMAIN="${DOMAIN:-}"
 APP_DIR="${APP_DIR:-/opt/fbmonoy}"
 APP_USER="${APP_USER:-mn}"
 DB_NAME="fbmonoy"
@@ -151,10 +153,14 @@ curl -sf "http://127.0.0.1:$PORT/api/health" >/dev/null \
   || warn "ແອັບຍັງບໍ່ຕອບ — ເບິ່ງ journalctl -u fbmonoy -n 50"
 
 # --------------------------------------------------------------- 6. nginx
+if [ -z "$DOMAIN" ]; then
+  warn "ບໍ່ໄດ້ໃສ່ DOMAIN — ຂ້າມ nginx ແລະ HTTPS"
+  warn "ແອັບຟັງຢູ່ 127.0.0.1:$PORT · ຕັ້ງພາຍຫຼັງ: sudo DOMAIN=... bash deploy/install.sh"
+else
 say "ຕັ້ງ nginx"
 mkdir -p /var/www/certbot
-sed "s|mounoyfb.odienmall.com|$DOMAIN|g" \
-  "$APP_DIR/deploy/nginx-mounoyfb.conf" > /etc/nginx/sites-available/fbmonoy
+sed "s|__DOMAIN__|$DOMAIN|g" \
+  "$APP_DIR/deploy/nginx.conf" > /etc/nginx/sites-available/fbmonoy
 ln -sf /etc/nginx/sites-available/fbmonoy /etc/nginx/sites-enabled/fbmonoy
 [ -e /etc/nginx/sites-enabled/default ] && rm -f /etc/nginx/sites-enabled/default && ok "ເອົາ default site ອອກ"
 nginx -t >/dev/null 2>&1 || die "nginx config ຜິດ — ກວດດ້ວຍ: nginx -t"
@@ -175,6 +181,7 @@ else
     warn "ແກ້ router ແລ້ວແລ່ນ: sudo certbot --nginx -d $DOMAIN --redirect"
   fi
 fi
+fi
 
 # ------------------------------------------------------------- 8. ສຳຮອງ DB
 say "ຕັ້ງການສຳຮອງຖານຂໍ້ມູນທຸກຄືນ"
@@ -194,7 +201,7 @@ cat <<EOF
 ────────────────────────────────────────────────
  ຕິດຕັ້ງສຳເລັດ
 
- ເວັບ            https://$DOMAIN
+ ເວັບ            ${DOMAIN:+https://$DOMAIN}${DOMAIN:-http://127.0.0.1:3000 (ຍັງບໍ່ໄດ້ຕັ້ງ nginx)}
  ລະຫັດເຂົ້າລະບົບ  $APP_PASSWORD
 
  ຄຳສັ່ງທີ່ໃຊ້ເລື້ອຍ
