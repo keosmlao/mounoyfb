@@ -109,6 +109,29 @@ body {
   color: var(--fg);
   font-family: var(--font-lao), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* ອັກສອນລາວມີສະຫຼະ ແລະ ວັນນະຍຸດຊ້ອນເທິງ-ລຸ່ມ —
+     ຄວາມສູງແຖວມາດຕະຖານ 1.4 ຈະເຮັດໃຫ້ຕົວໜັງສືຕິດກັນຈົນອ່ານຍາກ */
+  line-height: 1.65;
+}
+
+/* ຫົວຂໍ້ຕົວໃຫຍ່ບໍ່ຕ້ອງການແຖວຫ່າງເທົ່າເນື້ອຫາ */
+h1, h2, h3 {
+  line-height: 1.35;
+}
+
+/* ຄົນທີ່ຕັ້ງເຄື່ອງໃຫ້ຫຼຸດການເຄື່ອນໄຫວ — ເຄົາລົບການຕັ້ງຄ່ານັ້ນ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ບ່ອນທີ່ລິ້ງກະໂດດໄປຫາ ບໍ່ໃຫ້ຕິດຂອບເທິງຈໍ */
+[id] {
+  scroll-margin-top: 1rem;
 }
 
 /* ຕົວເລກໃຫ້ຈັດແຖວກົງກັນໃນຕາຕະລາງ */
@@ -151,6 +174,13 @@ body {
     opacity: 0.55;
     cursor: not-allowed;
   }
+  .btn:focus-visible,
+  .link:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
   .btn-primary {
     background: var(--brand);
     border-color: var(--brand);
@@ -191,6 +221,15 @@ body {
   }
   .field::placeholder {
     color: var(--fg-subtle);
+  }
+  select.field {
+    cursor: pointer;
+    /* ບໍ່ໃຫ້ຕົວເລືອກຍາວດັນກ່ອງຈົນລົ້ນ */
+    text-overflow: ellipsis;
+  }
+  textarea.field {
+    line-height: 1.6;
+    resize: vertical;
   }
 
   .label {
@@ -241,22 +280,27 @@ body {
     border-collapse: collapse;
     font-size: 0.875rem;
   }
+  /* ບໍ່ໃຊ້ uppercase/letter-spacing ເພາະບໍ່ມີຜົນກັບອັກສອນລາວ
+     ແຕ່ເຮັດໃຫ້ຄຳພາສາອັງກິດທີ່ປົນຢູ່ອ່ານຍາກ — ໃຊ້ນ້ຳໜັກ ແລະ ສີແທນ */
   table.data th {
     text-align: left;
     font-weight: 600;
-    font-size: 0.75rem;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--fg-subtle);
+    font-size: 0.78125rem;
+    color: var(--fg-muted);
     padding: 0.6rem 0.75rem;
     border-bottom: 1px solid var(--border);
     background: var(--surface-2);
     white-space: nowrap;
+    /* ຕາຕະລາງຍາວ — ຫົວຄ້າງໄວ້ໃຫ້ຮູ້ວ່າຄໍລຳໃດເປັນຫຍັງ */
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   table.data td {
-    padding: 0.6rem 0.75rem;
+    padding: 0.65rem 0.75rem;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
+    line-height: 1.5;
   }
   table.data tbody tr:last-child td {
     border-bottom: none;

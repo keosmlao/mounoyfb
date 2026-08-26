@@ -1,0 +1,46 @@
+# FBMONOY — systemd unit
+# ວາງໄວ້ /etc/systemd/system/fbmonoy.service
+#
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now fbmonoy
+#   sudo systemctl status fbmonoy
+#   journalctl -u fbmonoy -f          ← ເບິ່ງ log ສົດ
+
+[Unit]
+Description=FBMONOY — ລະບົບຈັດການການຍິງໂຄສະນາ Facebook
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=mn
+WorkingDirectory=/opt/fbmonoy
+
+# ອ່ານ DATABASE_URL, APP_PASSWORD, SESSION_SECRET ຈາກໄຟລ໌ນີ້
+EnvironmentFile=/opt/fbmonoy/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# ຟັງແຕ່ localhost — ໃຫ້ nginx ເປັນທາງເຂົ້າດຽວ
+Environment=HOSTNAME=127.0.0.1
+
+ExecStart=/usr/bin/npm run start
+
+# ດັບແລ້ວຟື້ນເອງ ແຕ່ບໍ່ໃຫ້ວົນຖີ່ເກີນຈົນກິນເຄື່ອງ
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# ຈຳກັດສິດເທົ່າທີ່ຈຳເປັນ
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/fbmonoy
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fbmonoy
+
+[Install]
+WantedBy=multi-user.target
