@@ -23,11 +23,15 @@
 **1. ຈາກເຄື່ອງຕົນເອງ** — ເອົາໂຄດຂຶ້ນເຊີບເວີ (ຖາມລະຫັດ SSH ເທື່ອດຽວ)
 
 ```bash
-ssh mn@10.0.40.77 'sudo mkdir -p /opt/fbmonoy && sudo chown $USER /opt/fbmonoy'
+# -t ຈຳເປັນ — ບໍ່ດັ່ງນັ້ນ sudo ຢູ່ປາຍທາງຖາມລະຫັດບໍ່ໄດ້
+ssh -t mn@10.0.40.77 'sudo mkdir -p /opt/fbmonoy && sudo chown $USER /opt/fbmonoy'
+
 rsync -az --delete \
   --exclude node_modules --exclude .next --exclude .git --exclude .env \
   ./ mn@10.0.40.77:/opt/fbmonoy/
 ```
+
+> ຖາມລະຫັດ 3 ເທື່ອ (ssh → sudo → rsync) — ໃຊ້ລະຫັດອັນດຽວກັນໝົດ
 
 **2. ຢູ່ເຊີບເວີ** — ຕິດຕັ້ງທັງໝົດ
 
