@@ -98,6 +98,22 @@ chmod 600 "$APP_DIR/.env"
 say "ຕິດຕັ້ງ ແລະ build (ໃຊ້ເວລາ 2-5 ນາທີ)"
 chown -R "$APP_USER":"$APP_USER" "$APP_DIR"
 sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && npm ci --no-audit --no-fund"
+# ຖ້າມີໄຟລ໌ສຳຮອງມານຳ ແລະ ຖານຂໍ້ມູນຍັງເປົ່າ ໃຫ້ກູ້ຄືນກ່ອນ —
+# dump ມີໂຄງສ້າງ ແລະ ປະຫວັດ migration ຢູ່ແລ້ວ migrate deploy ຈຶ່ງຮູ້ວ່າອັນໃດແລ່ນແລ້ວ
+DUMP="$APP_DIR/deploy/dump/fbmonoy.sql.gz"
+TABLE_COUNT=$(sudo -u postgres psql -tAd "$DB_NAME" -c \
+  "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null || echo 0)
+
+if [ -f "$DUMP" ] && [ "${TABLE_COUNT:-0}" -eq 0 ]; then
+  say "ກູ້ຂໍ້ມູນຈາກໄຟລ໌ສຳຮອງ"
+  gunzip -c "$DUMP" | sudo -u postgres psql -q -d "$DB_NAME" >/dev/null
+  sudo -u postgres psql -qd "$DB_NAME" -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO $DB_USER;"
+  sudo -u postgres psql -qd "$DB_NAME" -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO $DB_USER;"
+  ok "ກູ້ຂໍ້ມູນແລ້ວ"
+elif [ -f "$DUMP" ]; then
+  warn "ມີໄຟລ໌ສຳຮອງ ແຕ່ຖານຂໍ້ມູນມີຕາຕະລາງຢູ່ແລ້ວ ($TABLE_COUNT) — ຂ້າມການກູ້ຄືນ"
+fi
+
 sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && npx prisma migrate deploy"
 sudo -u "$APP_USER" bash -c "cd '$APP_DIR' && npm run build"
 ok "build ສຳເລັດ"

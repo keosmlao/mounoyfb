@@ -49,3 +49,6 @@ next-env.d.ts
 /.agents/skills
 /.claude/skills
 /.windsurf/skills
+
+# ສຳຮອງຖານຂໍ້ມູນ — ມີ Facebook token ຢູ່ຂ້າງໃນ ຫ້າມ push
+/deploy/dump/
