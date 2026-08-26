@@ -5,40 +5,80 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { logout } from "@/app/login/actions";
 
-type NavItem = { href: string; label: string; icon: string; badgeKey?: string };
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  badgeKey?: string;
+  /** ຄຳອະທິບາຍສັ້ນ — ສະແດງເມື່ອເອົາເມົ້າຊີ້ ເພື່ອບໍ່ໃຫ້ຄົນເດົາເອົາເອງ */
+  hint?: string;
+};
 type NavGroup = { title: string; items: NavItem[] };
 
+/**
+ * ຈັດຕາມ **ຄຳຖາມທີ່ຄົນຢາກຮູ້** ບໍ່ແມ່ນຕາມໂຄງສ້າງຖານຂໍ້ມູນ:
+ * ມື້ນີ້ຕ້ອງເຮັດຫຍັງ → ຂາຍໄດ້ເທົ່າໃດ → ຍິງຫຍັງຢູ່ → ຂໍ້ມູນຫຼັກ
+ */
 const NAV: NavGroup[] = [
   {
-    title: "ພາບລວມ",
+    title: "ຕັດສິນໃຈ",
     items: [
-      { href: "/", label: "ໜ້າຫຼັກ", icon: "▦" },
-      { href: "/alerts", label: "ການແຈ້ງເຕືອນ", icon: "⚠", badgeKey: "alerts" },
-      { href: "/analysis", label: "ວິເຄາະ", icon: "◈" },
-      { href: "/reports", label: "ລາຍງານ", icon: "▤" },
+      { href: "/", label: "ໜ້າຫຼັກ", icon: "◈", hint: "ມື້ນີ້ຕ້ອງເຮັດຫຍັງ" },
+      {
+        href: "/analysis",
+        label: "ວິເຄາະ",
+        icon: "◑",
+        hint: "ກຸ່ມໃດ ບ່ອນໃດ ເວລາໃດ ຄຸ້ມທີ່ສຸດ",
+      },
+      {
+        href: "/alerts",
+        label: "ການແຈ້ງເຕືອນ",
+        icon: "⚠",
+        badgeKey: "alerts",
+        hint: "ງົບເກີນ · ROAS ຕ່ຳ · ລູກຄ້າຄ້າງ",
+      },
     ],
   },
   {
-    title: "ການຍິງໂຄສະນາ",
+    title: "ຍອດຂາຍ",
     items: [
-      { href: "/campaigns", label: "ແຄມເປນ", icon: "◈" },
-      { href: "/insights", label: "ບັນທຶກຜົນລາຍວັນ", icon: "✎" },
-      { href: "/leads", label: "ລູກຄ້າ", icon: "☺" },
+      { href: "/orders", label: "ອໍເດີ", icon: "▧", hint: "ຍອດຂາຍຈິງ ແລະ ກຳໄລ" },
+      {
+        href: "/orders/import",
+        label: "ນຳເຂົ້າຍອດຂາຍ",
+        icon: "⤒",
+        hint: "ດຶງຈາກ Excel / Google Sheets",
+      },
+      { href: "/leads", label: "ລູກຄ້າ", icon: "☺", hint: "ຄົນທີ່ທັກເຂົ້າມາ" },
+    ],
+  },
+  {
+    title: "ໂຄສະນາ",
+    items: [
+      { href: "/campaigns", label: "ແຄມເປນ", icon: "◉", hint: "ສິ່ງທີ່ກຳລັງຍິງຢູ່" },
+      { href: "/reports", label: "ລາຍງານ", icon: "▤", hint: "ສະຫຼຸບ + ດາວໂຫຼດ CSV" },
     ],
   },
   {
     title: "ຂໍ້ມູນຫຼັກ",
     items: [
+      { href: "/products", label: "ສິນຄ້າ", icon: "◻", hint: "ລາຄາ ແລະ ຕົ້ນທຶນ" },
       { href: "/ad-accounts", label: "ບັນຊີໂຄສະນາ", icon: "▣" },
       { href: "/fb-pages", label: "ເພຈ", icon: "⚑" },
-      { href: "/products", label: "ສິນຄ້າ", icon: "◻" },
-      { href: "/settings", label: "ຕັ້ງຄ່າ", icon: "⚙" },
+      {
+        href: "/settings",
+        label: "ຕັ້ງຄ່າ",
+        icon: "⚙",
+        hint: "ດຶງຂໍ້ມູນ · Facebook token",
+      },
     ],
   },
 ];
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
+  // /orders/import ເປັນເມນູຂອງມັນເອງ — ບໍ່ຄວນເຮັດໃຫ້ /orders ເຂັ້ມນຳ
+  if (href === "/orders") return pathname !== "/orders/import" && pathname.startsWith("/orders");
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -60,6 +100,7 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
                 <li key={item.href}>
                   <Link
                     href={item.href}
+                    title={item.hint}
                     onClick={() => setOpen(false)}
                     className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
                       active

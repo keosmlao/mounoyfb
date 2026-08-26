@@ -30,7 +30,7 @@ export default async function ReportsPage({
     <>
       <PageHeader
         title="ລາຍງານ"
-        description="ສະຫຼຸບຜົນການຍິງຕາມມິຕິຕ່າງໆ — ຄ່າໃຊ້ຈ່າຍ ແລະ ຍອດຂາຍເປັນສະກຸນກີບທັງໝົດ"
+        description="ສະຫຼຸບຄ່າ Ads ຈາກ Meta ຄູ່ກັບ Order ແລະກຳໄລຈິງຂອງຮ້ານ"
         action={
           <a href={exportHref} className="btn">
             ⤓ ດາວໂຫຼດ CSV
@@ -67,7 +67,7 @@ export default async function ReportsPage({
             title="ບໍ່ມີຂໍ້ມູນໃນຊ່ວງນີ້"
             hint="ລອງຂະຫຍາຍຊ່ວງວັນ ຫຼື ໄປບັນທຶກຜົນລາຍວັນກ່ອນ"
             action={
-              <Link href="/insights" className="btn btn-primary">
+              <Link href="/settings" className="btn btn-primary">
                 ໄປໜ້າບັນທຶກຜົນ
               </Link>
             }
@@ -87,11 +87,14 @@ export default async function ReportsPage({
                   <th className="num">CPM</th>
                   <th className="num">ທັກແຊັດ</th>
                   <th className="num">ຄ່າ/ທັກ</th>
-                  <th className="num">ອໍເດີ</th>
-                  <th className="num">ຄ່າ/ອໍເດີ</th>
-                  <th className="num">ຍອດຂາຍ</th>
-                  <th className="num">ກຳໄລ</th>
-                  <th className="num">ROAS</th>
+                  <th className="num">Meta Purchase</th>
+                  <th className="num">ສົ່ງສຳເລັດ</th>
+                  <th className="num">ຄ່າ Ads/ສົ່ງສຳເລັດ</th>
+                  <th className="num">ຍອດຂາຍຈິງ</th>
+                  <th className="num">ຕົ້ນທຶນ+ຄ່າສົ່ງ</th>
+                  <th className="num">ກຳໄລຈິງ</th>
+                  <th className="num">Actual ROAS</th>
+                  <th className="num">ຕີກັບ</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,22 +123,27 @@ export default async function ReportsPage({
                       {r.messages ? money(r.costPerMessage) : "—"}
                     </td>
                     <td className="num">{formatCompact(r.purchases)}</td>
+                    <td className="num">{r.hasOrderData ? formatCompact(r.delivered) : "—"}</td>
                     <td className="num">
-                      {r.purchases ? money(r.costPerPurchase) : "—"}
+                      {r.delivered ? money(r.costPerDeliveredOrder) : "—"}
                     </td>
-                    <td className="num">{money(r.revenue)}</td>
+                    <td className="num">{r.hasOrderData ? money(r.netRevenue) : "—"}</td>
+                    <td className="num">
+                      {r.hasOrderData ? money(r.productCost + r.fulfillmentCost) : "—"}
+                    </td>
                     <td
                       className={`num ${
-                        r.profit >= 0
+                        r.contributionProfit >= 0
                           ? "text-[var(--success)]"
                           : "text-[var(--danger)]"
                       }`}
                     >
-                      {money(r.profit)}
+                      {r.hasOrderData ? money(r.contributionProfit) : "—"}
                     </td>
                     <td className="num">
-                      {r.spendLak ? `${r.roas.toFixed(2)}x` : "—"}
+                      {r.hasOrderData && r.spendLak ? `${r.actualRoas.toFixed(2)}x` : "—"}
                     </td>
+                    <td className="num">{r.hasOrderData ? formatPercent(r.returnRate, 1) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -173,22 +181,35 @@ export default async function ReportsPage({
                     {formatCompact(totals.purchases)}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {totals.purchases ? money(totals.costPerPurchase) : "—"}
+                    {totals.hasOrderData ? formatCompact(totals.delivered) : "—"}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {money(totals.revenue)}
+                    {totals.delivered ? money(totals.costPerDeliveredOrder) : "—"}
+                  </td>
+                  <td className="num border-t-2 border-[var(--border-strong)]">
+                    {totals.hasOrderData ? money(totals.netRevenue) : "—"}
+                  </td>
+                  <td className="num border-t-2 border-[var(--border-strong)]">
+                    {totals.hasOrderData
+                      ? money(totals.productCost + totals.fulfillmentCost)
+                      : "—"}
                   </td>
                   <td
                     className={`num border-t-2 border-[var(--border-strong)] ${
-                      totals.profit >= 0
+                      totals.contributionProfit >= 0
                         ? "text-[var(--success)]"
                         : "text-[var(--danger)]"
                     }`}
                   >
-                    {money(totals.profit)}
+                    {totals.hasOrderData ? money(totals.contributionProfit) : "—"}
                   </td>
                   <td className="num border-t-2 border-[var(--border-strong)]">
-                    {totals.spendLak ? `${totals.roas.toFixed(2)}x` : "—"}
+                    {totals.hasOrderData && totals.spendLak
+                      ? `${totals.actualRoas.toFixed(2)}x`
+                      : "—"}
+                  </td>
+                  <td className="num border-t-2 border-[var(--border-strong)]">
+                    {totals.hasOrderData ? formatPercent(totals.returnRate, 1) : "—"}
                   </td>
                 </tr>
               </tfoot>

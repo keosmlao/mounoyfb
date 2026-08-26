@@ -15,7 +15,7 @@ import {
   toDateInput,
 } from "@/lib/date";
 import { aggregate, derive, groupTotals } from "@/lib/metrics";
-import { formatCompact, formatPercent } from "@/lib/format";
+import { formatCompact } from "@/lib/format";
 import { LEAD_STATUS_LABEL, LEAD_STATUS_TONE } from "@/lib/labels";
 import { totalsScope } from "@/lib/scope";
 import { AlertList } from "@/components/AlertList";
@@ -23,6 +23,8 @@ import { buildAlerts, countActionable } from "@/lib/alerts";
 import { AdviceList } from "@/components/AdviceList";
 import { actionable, buildAdvice, summary, waiting } from "@/lib/advice";
 import { loadMoney } from "@/lib/money-server";
+import { orderEconomics } from "@/lib/advice-rules";
+import { sumOrderTotals, type OrderFinancialRow } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -89,8 +91,34 @@ export default async function DashboardPage({
     buildAlerts(),
   ]);
 
+  // ຍອດຂາຍຈິງມາຈາກ Order ບໍ່ແມ່ນ Insight.revenue —
+  // Facebook ບໍ່ຮູ້ຍອດຂາຍຂອງແຄມເປນທີ່ປິດການຂາຍຜ່ານແຊັດ
+  const [econ, orderRows] = await Promise.all([
+    orderEconomics(range),
+    prisma.order.findMany({
+      where: { date: { gte: parseDate(range.from), lte: parseDate(range.to) } },
+      select: {
+        date: true,
+        status: true,
+        saleAmount: true,
+        productCost: true,
+        shippingCost: true,
+        otherCost: true,
+        refundAmount: true,
+      },
+    }),
+  ]);
+
   const total = aggregate(rows);
   const prevTotal = aggregate(prevRows);
+  const orderTotals = sumOrderTotals(orderRows as OrderFinancialRow[]);
+
+  /** ກຳໄລ ແລະ ROAS ທີ່ເຊື່ອຖືໄດ້ — ໃຊ້ອໍເດີກ່ອນສະເໝີ ຖ້າມີ */
+  const realRevenue = orderTotals.netRevenue || total.revenue;
+  const realProfit = econ
+    ? econ.contributionProfit
+    : realRevenue - total.spendLak;
+  const realRoas = total.spendLak > 0 ? realRevenue / total.spendLak : 0;
   const advice = await buildAdvice(range);
   const topAdvice = actionable(advice).slice(0, 4);
   const blocked = waiting(advice).slice(0, 2);
@@ -102,7 +130,18 @@ export default async function DashboardPage({
   const byDay = groupTotals(rows, (r) => toDateInput(r.date));
   const labels = days.map(formatDayShort);
   const spendSeries = days.map((d) => byDay.get(d)?.spendLak ?? 0);
-  const revenueSeries = days.map((d) => byDay.get(d)?.revenue ?? 0);
+  const orderRevenueByDay = new Map<string, number>();
+  for (const o of orderRows) {
+    if (o.status === "CANCELLED" || o.status === "RETURNED") continue;
+    const k = toDateInput(o.date);
+    orderRevenueByDay.set(
+      k,
+      (orderRevenueByDay.get(k) ?? 0) + o.saleAmount - o.refundAmount,
+    );
+  }
+  const revenueSeries = days.map(
+    (d) => orderRevenueByDay.get(d) ?? byDay.get(d)?.revenue ?? 0,
+  );
   const messageSeries = days.map((d) => byDay.get(d)?.messages ?? 0);
 
   // ---- ຈັດອັນດັບແຄມເປນ
@@ -137,9 +176,6 @@ export default async function DashboardPage({
         description={`${activeCampaigns} ແຄມເປນກຳລັງຍິງ · ລູກຄ້າໃໝ່ທີ່ຍັງບໍ່ໄດ້ຕິດຕໍ່ ${newLeads} ຄົນ`}
         action={
           <>
-            <Link href="/insights" className="btn">
-              ບັນທຶກຜົນລາຍວັນ
-            </Link>
             <Link href="/campaigns/new" className="btn btn-primary">
               + ສ້າງແຄມເປນ
             </Link>
@@ -196,29 +232,38 @@ export default async function DashboardPage({
 
       <DateRangeBar basePath="/" range={range} activePreset={sp.preset} />
 
-      {/* ຕົວເລກນຳຂອງໜ້າ — ກຳໄລສຸດທິຂອງຊ່ວງ */}
+      {/* ຕົວເລກນຳ — ກຳໄລຈິງຈາກອໍເດີ ບໍ່ແມ່ນຈາກ pixel ຂອງ Facebook */}
       <Card className="mb-5 flex flex-wrap items-end justify-between gap-6 p-5">
         <div>
           <p className="text-sm text-[var(--fg-muted)]">
-            ກຳໄລສຸດທິ (ຍອດຂາຍ − ຄ່າໂຄສະນາ)
+            ກຳໄລສຸດທິ
+            <span className="ml-1 text-xs text-[var(--fg-subtle)]">
+              {econ ? "(ຍອດຂາຍ − ຕົ້ນທຶນ − ຄ່າສົ່ງ − ຄ່າໂຄສະນາ)" : "(ຍອດຂາຍ − ຄ່າໂຄສະນາ)"}
+            </span>
           </p>
           <p
             className={`mt-1 text-5xl font-semibold leading-none ${
-              total.profit >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
+              realProfit >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
             }`}
           >
-            {money(total.profit)}
+            {money(realProfit)}
           </p>
           <p className="mt-2 text-sm text-[var(--fg-muted)]">
             {formatDateLao(range.from)} — {formatDateLao(range.to)}
           </p>
         </div>
+
         <dl className="flex flex-wrap gap-x-8 gap-y-3">
           <div>
             <dt className="text-xs text-[var(--fg-muted)]">ROAS</dt>
             <dd className="text-xl font-semibold">
-              {total.spendLak ? `${total.roas.toFixed(2)}x` : "—"}
+              {total.spendLak ? `${realRoas.toFixed(2)}x` : "—"}
             </dd>
+            {econ ? (
+              <dd className="text-[0.7rem] text-[var(--fg-subtle)]">
+                ຄຸ້ມທຶນທີ່ {econ.breakEvenRoas.toFixed(2)}x
+              </dd>
+            ) : null}
           </div>
           <div>
             <dt className="text-xs text-[var(--fg-muted)]">ຄ່າໂຄສະນາ</dt>
@@ -226,12 +271,18 @@ export default async function DashboardPage({
           </div>
           <div>
             <dt className="text-xs text-[var(--fg-muted)]">ຍອດຂາຍ</dt>
-            <dd className="text-xl font-semibold">{money(total.revenue)}</dd>
+            <dd className="text-xl font-semibold">{money(realRevenue)}</dd>
+            {orderTotals.delivered > 0 ? (
+              <dd className="text-[0.7rem] text-[var(--fg-subtle)]">
+                {formatCompact(orderTotals.delivered)} ອໍເດີສົ່ງສຳເລັດ
+              </dd>
+            ) : null}
           </div>
         </dl>
       </Card>
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* 5 ຕົວທີ່ໃຊ້ຕັດສິນໃຈຈິງ — ຕົວອື່ນຢູ່ໜ້າ ວິເຄາະ ແລະ ລາຍງານ */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatTile
           label="ຄ່າໂຄສະນາ"
           value={money(total.spendLak)}
@@ -253,45 +304,33 @@ export default async function DashboardPage({
           current={total.costPerMessage}
           previous={prevTotal.costPerMessage}
           upIsGood={false}
+          hint="ຕົວຊີ້ວັດຫຼັກຂອງແຄມເປນແບບທັກແຊັດ"
         />
         <StatTile
-          label="ອໍເດີ"
-          value={formatCompact(total.purchases)}
-          current={total.purchases}
-          previous={prevTotal.purchases}
-          spark={days.map((d) => byDay.get(d)?.purchases ?? 0)}
+          label="ອໍເດີສົ່ງສຳເລັດ"
+          value={formatCompact(orderTotals.delivered)}
+          hint={
+            orderTotals.returned > 0
+              ? `ຕີກັບ ${formatCompact(orderTotals.returned)}`
+              : "ຈາກໜ້າ ອໍເດີ"
+          }
         />
         <StatTile
-          label="ຄ່າຕໍ່ 1 ອໍເດີ"
-          value={total.purchases ? money(total.costPerPurchase) : "—"}
-          current={total.costPerPurchase}
-          previous={prevTotal.costPerPurchase}
+          label="ຄ່າໂຄສະນາຕໍ່ 1 ອໍເດີ"
+          value={
+            orderTotals.delivered
+              ? money(total.spendLak / orderTotals.delivered)
+              : "—"
+          }
           upIsGood={false}
-        />
-        <StatTile
-          label="ຄັ້ງທີ່ເຫັນ"
-          value={formatCompact(total.impressions)}
-          current={total.impressions}
-          previous={prevTotal.impressions}
-        />
-        <StatTile
-          label="CTR"
-          value={formatPercent(total.ctr)}
-          current={total.ctr}
-          previous={prevTotal.ctr}
-        />
-        <StatTile
-          label="ອັດຕາປິດ (ອໍເດີ ÷ ທັກ)"
-          value={formatPercent(total.convRate, 1)}
-          current={total.convRate}
-          previous={prevTotal.convRate}
+          hint={econ ? `ເພດານ ${money(econ.marginPerOrder)}` : "ຕ້ອງມີອໍເດີກ່ອນ"}
         />
       </div>
 
       <Card className="mb-5">
         <CardHeader
           title="ຄ່າໂຄສະນາ ທຽບ ຍອດຂາຍ ລາຍວັນ"
-          subtitle="ທັງສອງເສັ້ນເປັນສະກຸນກີບ ຈຶ່ງໃຊ້ແກນດຽວກັນ"
+          subtitle="ຍອດຂາຍມາຈາກອໍເດີທີ່ບັນທຶກໄວ້ — ທັງສອງເສັ້ນໃຊ້ແກນດຽວກັນ"
         />
         <TrendChart
           currency={currency}

@@ -117,7 +117,7 @@ export default async function CampaignDetailPage({
             <Link href="/campaigns" className="btn">
               ← ລາຍການ
             </Link>
-            <Link href={`/insights?campaign=${id}`} className="btn">
+            <Link href="/analysis" className="btn">
               ບັນທຶກຜົນ
             </Link>
             <Link href={`/campaigns/${id}/edit`} className="btn btn-primary">
@@ -258,7 +258,7 @@ export default async function CampaignDetailPage({
               title="ຜົນລາຍວັນທີ່ບັນທຶກໄວ້"
               subtitle={`${rows.length} ແຖວ ໃນຊ່ວງທີ່ເລືອກ`}
               action={
-                <Link href={`/insights?campaign=${id}`} className="btn btn-sm">
+                <Link href="/analysis" className="btn btn-sm">
                   ໄປໜ້າບັນທຶກ
                 </Link>
               }

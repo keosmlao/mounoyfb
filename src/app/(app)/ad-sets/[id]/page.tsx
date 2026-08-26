@@ -16,23 +16,12 @@ import {
   deleteAdSet,
   updateAdSet,
 } from "@/app/(app)/campaigns/actions";
-import { saveSingleInsight } from "@/app/(app)/insights/actions";
 import { CREATIVE_TYPES, STATUS_LABEL, STATUS_TONE, options } from "@/lib/labels";
-import { addDays, toDateInput, todayStr } from "@/lib/date";
+import { toDateInput } from "@/lib/date";
 import { formatCompact } from "@/lib/format";
 import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
-
-const ADSET_METRICS = [
-  { key: "spend", label: "ຄ່າໂຄສະນາ", step: "0.01" },
-  { key: "impressions", label: "ຄັ້ງທີ່ເຫັນ", step: "1" },
-  { key: "reach", label: "ເຂົ້າເຖິງ", step: "1" },
-  { key: "clicks", label: "ຄລິກ", step: "1" },
-  { key: "messages", label: "ທັກແຊັດ", step: "1" },
-  { key: "purchases", label: "ອໍເດີ", step: "1" },
-  { key: "revenue", label: "ຍອດຂາຍ (ກີບ)", step: "1000" },
-] as const;
 
 export default async function AdSetDetailPage({
   params,
@@ -50,13 +39,6 @@ export default async function AdSetDetailPage({
   });
   if (!adSet) notFound();
 
-  const fxSetting = await prisma.appSetting.findUnique({
-    where: { key: "defaultFxRateToLak" },
-  });
-  const defaultFx =
-    adSet.campaign.adAccount.currency === "LAK"
-      ? 1
-      : Number(fxSetting?.value) || 21700;
 
   const adTotals = await prisma.insight.groupBy({
     by: ["adId"],
@@ -247,51 +229,6 @@ export default async function AdSetDetailPage({
             </form>
           </Card>
         </div>
-
-        <Card className="h-fit">
-          <CardHeader
-            title="ບັນທຶກຜົນຂອງຊຸດນີ້"
-            subtitle="ລາຍລະອຽດລະດັບຊຸດ — ບໍ່ຖືກນັບຊ້ຳໃນຍອດລວມຂອງແຄມເປນ"
-          />
-          <form action={saveSingleInsight} className="grid gap-3 p-4 sm:grid-cols-2">
-            <input type="hidden" name="level" value="ADSET" />
-            <input type="hidden" name="targetId" value={adSet.id} />
-            <Field label="ວັນທີ່ *" className="sm:col-span-2">
-              <input
-                name="date"
-                type="date"
-                required
-                defaultValue={addDays(todayStr(), -1)}
-                className="field"
-              />
-            </Field>
-            <Field label="ອັດຕາແລກປ່ຽນ (→ ກີບ)" className="sm:col-span-2">
-              <input
-                name="fxRateToLak"
-                type="number"
-                step="1"
-                min="1"
-                defaultValue={defaultFx}
-                className="field"
-              />
-            </Field>
-            {ADSET_METRICS.map((m) => (
-              <Field key={m.key} label={m.label}>
-                <input
-                  name={`${m.key}_row`}
-                  type="number"
-                  step={m.step}
-                  min="0"
-                  placeholder="0"
-                  className="field tnum text-right"
-                />
-              </Field>
-            ))}
-            <div className="sm:col-span-2">
-              <SubmitButton>ບັນທຶກຜົນ</SubmitButton>
-            </div>
-          </form>
-        </Card>
 
         <Card className="h-fit">
           <CardHeader title="ເພີ່ມໂຄສະນາ" />

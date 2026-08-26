@@ -254,15 +254,18 @@ export async function buildAlerts(): Promise<Alert[]> {
       }
     }
 
-    // 5) ແຄມເປນທີ່ກຳລັງຍິງ ແຕ່ຍັງບໍ່ໄດ້ບັນທຶກຜົນມື້ວານ
+    // 5) ແຄມເປນທີ່ກຳລັງຍິງ ແຕ່ບໍ່ມີຂໍ້ມູນມື້ວານ — ແປວ່າຍັງບໍ່ໄດ້ດຶງ
+    //    (ຕັ້ງແຕ່ຕໍ່ Facebook ແລ້ວ ຂໍ້ມູນຄວນມາເອງ ຈຶ່ງເປັນສັນຍານວ່າ sync ຄ້າງ)
     if (campaign.status === "ACTIVE" && spentYesterday === undefined) {
       alerts.push({
         id: `missing:${campaign.id}`,
         severity: "info",
         category: "ຂໍ້ມູນ",
-        title: `ຍັງບໍ່ໄດ້ບັນທຶກຜົນ: ${campaign.name}`,
-        detail: `ບໍ່ມີຂໍ້ມູນຂອງວັນທີ່ ${formatDateLao(yesterday)} — ຕົວເລກລາຍງານຈະບໍ່ຄົບ`,
-        href: `/insights?date=${yesterday}`,
+        title: `ຍັງບໍ່ໄດ້ດຶງຂໍ້ມູນ: ${campaign.name}`,
+        detail:
+          `ບໍ່ມີຜົນຂອງວັນທີ່ ${formatDateLao(yesterday)} — ` +
+          `ໄປໜ້າ ຕັ້ງຄ່າ ແລ້ວກົດ “ດຶງຂໍ້ມູນດຽວນີ້”`,
+        href: "/settings",
       });
     }
 
