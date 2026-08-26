@@ -5,7 +5,7 @@ import { AdviceList } from "@/components/AdviceList";
 import { resolveRange } from "@/lib/date";
 import { loadMoney } from "@/lib/money-server";
 import { formatInt, formatPercent } from "@/lib/format";
-import { buildAdvice } from "@/lib/advice";
+import { actionable, buildAdvice, waiting } from "@/lib/advice";
 import {
   buildAllSegmentReports,
   hasData,
@@ -226,8 +226,18 @@ export default async function AnalysisPage({
             title="ຄວນເຮັດຫຍັງຕໍ່"
             subtitle="ຄິດຈາກຂໍ້ມູນຂອງຊ່ວງທີ່ເລືອກ — ທຸກຂໍ້ບອກເຫດຜົນເປັນຕົວເລກໄວ້ໃຫ້ກວດຄືນ"
           />
-          <AdviceList advice={advice} />
+          <AdviceList advice={actionable(advice)} />
         </Card>
+
+        {waiting(advice).length > 0 ? (
+          <Card>
+            <CardHeader
+              title="ຍັງຕັດສິນບໍ່ໄດ້"
+              subtitle="ຂາດຂໍ້ມູນຫຍັງ ແລະ ຕ້ອງເຮັດຫຍັງຈຶ່ງຕັດສິນໄດ້"
+            />
+            <AdviceList advice={waiting(advice)} />
+          </Card>
+        ) : null}
 
         <div>
           <KindTabs active={kind} params={{ from: range.from, to: range.to }} />

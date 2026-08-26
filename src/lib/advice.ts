@@ -8,12 +8,20 @@ import { type MoneyFn } from "./money";
 import { loadMoney } from "./money-server";
 import {
   MIN_MESSAGES_ABS,
+  MIN_SPEND_LAK,
   buildAllSegmentReports,
   trustedBad,
   trustedGood,
   type SegmentReport,
 } from "./analysis";
 import { SegmentKind } from "@/generated/prisma/enums";
+import { confidenceFrom, suggestBudgetStep, type Advice } from "./advice-types";
+import {
+  adviseCreativeFatigue,
+  adviseUnitEconomics,
+  adviseWaiting,
+  orderEconomics,
+} from "./advice-rules";
 
 /**
  * ເຄື່ອງອອກຄຳແນະນຳ — ປ່ຽນຕົວເລກໃຫ້ເປັນ "ຄວນເຮັດຫຍັງຕໍ່".
@@ -26,30 +34,13 @@ import { SegmentKind } from "@/generated/prisma/enums";
  * 3. **ຄຳແນະນຳຜິດຮ້າຍກວ່າບໍ່ມີຄຳແນະນຳ** — ສົງໄສໃຫ້ງຽບໄວ້
  */
 
-export type AdviceKind = "cut" | "scale" | "shift" | "watch" | "info";
-
-export type Advice = {
-  id: string;
-  kind: AdviceKind;
-  title: string;
-  /** ເຫດຜົນເປັນຕົວເລກ */
-  reason: string;
-  /** ຜົນທີ່ຄາດວ່າຈະໄດ້ ຫຼື ວິທີລົງມື */
-  impact?: string;
-  href?: string;
-};
-
-const TONE: Record<AdviceKind, { label: string; tone: string; icon: string }> = {
-  cut: { label: "ຄວນຕັດ", tone: "danger", icon: "▼" },
-  scale: { label: "ຄວນເພີ່ມ", tone: "success", icon: "▲" },
-  shift: { label: "ຄວນຍ້າຍ", tone: "warning", icon: "⇄" },
-  watch: { label: "ຄວນເຝົ້າເບິ່ງ", tone: "info", icon: "◷" },
-  info: { label: "ຂໍ້ສັງເກດ", tone: "neutral", icon: "·" },
-};
-
-export function adviceTone(kind: AdviceKind) {
-  return TONE[kind];
-}
+export {
+  adviceTone,
+  CONFIDENCE_LABEL,
+  type Advice,
+  type AdviceKind,
+  type Confidence,
+} from "./advice-types";
 
 /** ຄ່າຕໍ່ຄົນທັກຕ້ອງຕ່າງກັນເທົ່ານີ້ຂຶ້ນໄປ ຈຶ່ງຄຸ້ມທີ່ຈະລົງມື */
 const MEANINGFUL_GAP = 1.4;
@@ -84,6 +75,8 @@ function adviseSegment(report: SegmentReport, money: MoneyFn): Advice[] {
             `${r.costIndex.toFixed(1)} ເທົ່າ ແຕ່ກິນງົບ ${pct(r.spendShare)} ` +
             `(${money(r.spendLak)} ໄດ້ ${formatInt(r.messages)} ຄົນທັກ)`,
       impact: wasted > 0 ? `ຕັດແລ້ວປະຢັດໄດ້ປະມານ ${money(wasted)}` : undefined,
+      confidence: confidenceFrom(r.spendLak, MIN_SPEND_LAK),
+      sample: `${formatInt(r.messages)} ຄົນທັກ · ${money(r.spendLak)}`,
       href: `/analysis?kind=${kind}`,
     });
   }
@@ -104,8 +97,11 @@ function adviseSegment(report: SegmentReport, money: MoneyFn): Advice[] {
         `(${formatInt(r.messages)} ຄົນທັກ · ${pct(r.messageShare)} ຂອງທັງໝົດ)`,
       impact:
         r.spendShare < r.messageShare
-          ? `ໄດ້ຄົນທັກ ${pct(r.messageShare)} ແຕ່ໃຊ້ງົບແຕ່ ${pct(r.spendShare)} — ຍັງມີບ່ອນຂະຫຍາຍ`
-          : undefined,
+          ? `ໄດ້ຄົນທັກ ${pct(r.messageShare)} ແຕ່ໃຊ້ງົບແຕ່ ${pct(r.spendShare)} — ` +
+            `ລອງເພີ່ມງົບເທື່ອລະ ${suggestBudgetStep(r.costIndex)} ແລ້ວເບິ່ງ 3 ວັນ`
+          : `ລອງເພີ່ມງົບເທື່ອລະ ${suggestBudgetStep(r.costIndex)} ແລ້ວເບິ່ງ 3 ວັນ`,
+      confidence: confidenceFrom(r.messages, MIN_MESSAGES_ABS),
+      sample: `${formatInt(r.messages)} ຄົນທັກ · ${money(r.spendLak)}`,
       href: `/analysis?kind=${kind}`,
     });
   }
@@ -149,6 +145,8 @@ function adviseHours(report: SegmentReport, money: MoneyFn): Advice[] {
         `${worst.band} ${money(worst.cost)} (${formatInt(worst.messages)} ຄົນທັກ) — ຕ່າງກັນ ${gap.toFixed(1)} ເທົ່າ`,
       impact:
         "ຕັ້ງເວລາສະແດງໂຄສະນາໄດ້ໃນຊຸດໂຄສະນາ ຖ້າໃຊ້ງົບລວມ (lifetime budget)",
+      confidence: confidenceFrom(best.messages + worst.messages, MIN_MESSAGES_ABS * 3),
+      sample: `${formatInt(best.messages + worst.messages)} ຄົນທັກ ໃນ 2 ຊ່ວງເວລາ`,
       href: "/analysis?kind=HOUR",
     },
   ];
@@ -194,6 +192,8 @@ async function adviseCampaigns(
         kind: "cut",
         title: `ແຄມເປນ "${name}" ບໍ່ມີຄົນທັກເລີຍ`,
         reason: `ໃຊ້ໄປ ${money(d.spendLak)} ໃນຊ່ວງນີ້ ແຕ່ບໍ່ໄດ້ຄົນທັກ`,
+        confidence: confidenceFrom(d.spendLak, overall.spendLak * 0.15),
+        sample: `${money(d.spendLak)} ຄ່າໂຄສະນາ · 0 ຄົນທັກ`,
         href: `/campaigns/${id}`,
       });
       continue;
@@ -209,6 +209,8 @@ async function adviseCampaigns(
         reason:
           `ຄ່າຕໍ່ຄົນທັກ ${money(d.costPerMessage)} ແພງກວ່າແຄມເປນອື່ນ ` +
           `${index.toFixed(1)} ເທົ່າ (${formatInt(d.messages)} ຄົນທັກ · ${money(d.spendLak)})`,
+        confidence: confidenceFrom(d.messages, MIN_MESSAGES_ABS),
+        sample: `${formatInt(d.messages)} ຄົນທັກ · ${money(d.spendLak)}`,
         href: `/campaigns/${id}`,
       });
     } else if (index > 0 && index < 1 / MEANINGFUL_GAP) {
@@ -219,6 +221,9 @@ async function adviseCampaigns(
         reason:
           `ຄ່າຕໍ່ຄົນທັກ ${money(d.costPerMessage)} ຖືກກວ່າແຄມເປນອື່ນ ` +
           `${(1 / index).toFixed(1)} ເທົ່າ (${formatInt(d.messages)} ຄົນທັກ)`,
+        impact: `ລອງເພີ່ມງົບເທື່ອລະ ${suggestBudgetStep(index)} ແລ້ວເບິ່ງ 3 ວັນ`,
+        confidence: confidenceFrom(d.messages, MIN_MESSAGES_ABS),
+        sample: `${formatInt(d.messages)} ຄົນທັກ · ${money(d.spendLak)}`,
         href: `/campaigns/${id}`,
       });
     }
@@ -259,6 +264,8 @@ async function adviseTrend(
         `ເຄິ່ງທຳອິດຂອງຊ່ວງ ${money(older.costPerMessage)} → ` +
         `ເຄິ່ງຫຼັງ ${money(newer.costPerMessage)} (ຂຶ້ນ ${Math.round((change - 1) * 100)}%)`,
       impact: "ມັກເກີດເມື່ອກຸ່ມເປົ້າໝາຍເລີ່ມເບື່ອຮູບ — ລອງປ່ຽນຮູບ/ຂໍ້ຄວາມໃໝ່",
+      confidence: confidenceFrom(older.messages + newer.messages, MIN_MESSAGES_ABS * 2),
+      sample: `${formatInt(older.messages + newer.messages)} ຄົນທັກ · ${rows.length} ວັນ`,
       href: "/campaigns",
     },
   ];
@@ -292,6 +299,8 @@ async function adviseBreakEven(
           `ຊ່ວງນີ້ໃຊ້ຄ່າໂຄສະນາ ${money(t.spendLak)} ໄດ້ ${formatInt(t.messages)} ຄົນທັກ ` +
           `ແຕ່ລະບົບຍັງບໍ່ຮູ້ລາຄາຂາຍ ແລະ ຕົ້ນທຶນສິນຄ້າ`,
         impact: "ໃສ່ສິນຄ້າ 1 ລາຍການ ແລ້ວລະບົບຈະຄິດຈຸດຄຸ້ມທຶນໃຫ້ອັດຕະໂນມັດ",
+        confidence: "low",
+        sample: `${formatInt(t.messages)} ຄົນທັກ · 0 ສິນຄ້າ`,
         href: "/products",
       },
     ];
@@ -318,7 +327,9 @@ async function adviseBreakEven(
         t.messages > 0
           ? `ຈາກ ${formatInt(t.messages)} ຄົນທັກ ຕ້ອງປິດການຂາຍໃຫ້ໄດ້ ${pct(closeRate)}`
           : undefined,
-      href: "/leads",
+      confidence: confidenceFrom(days, 7),
+      sample: `${days} ວັນ · ${formatInt(products.length)} ສິນຄ້າ`,
+      href: "/orders",
     },
   ];
 }
@@ -336,18 +347,48 @@ export async function buildAdvice(range: DateRange): Promise<Advice[]> {
       : adviseSegment(r, money),
   );
 
-  const [campaigns, trend, breakEven] = await Promise.all([
-    adviseCampaigns(range, money),
-    adviseTrend(range, money),
-    adviseBreakEven(range, money),
-  ]);
+  const econ = await orderEconomics(range);
 
-  const all = [...campaigns, ...segmentAdvice, ...trend, ...breakEven];
-  const order: AdviceKind[] = ["cut", "scale", "shift", "watch", "info"];
-  return all.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
+  const [campaigns, trend, breakEven, fatigue, unit, waiting] =
+    await Promise.all([
+      adviseCampaigns(range, money),
+      adviseTrend(range, money),
+      adviseBreakEven(range, money),
+      adviseCreativeFatigue(range, money),
+      econ ? adviseUnitEconomics(range, money, econ) : Promise.resolve([]),
+      adviseWaiting(range, money, econ),
+    ]);
+
+  const all = [
+    ...unit,
+    ...campaigns,
+    ...segmentAdvice,
+    ...fatigue,
+    ...trend,
+    ...breakEven,
+    ...waiting,
+  ];
+
+  const order: Advice["kind"][] = [
+    "cut",
+    "scale",
+    "shift",
+    "watch",
+    "wait",
+    "info",
+  ];
+  const rank = (a: Advice) =>
+    order.indexOf(a.kind) * 10 +
+    ({ high: 0, medium: 1, low: 2 } as const)[a.confidence];
+  return all.sort((a, b) => rank(a) - rank(b));
 }
 
 /** ໃຊ້ໃນໜ້າຫຼັກ — ເອົາສະເພາະທີ່ຕ້ອງລົງມື */
 export function actionable(advice: Advice[]): Advice[] {
-  return advice.filter((a) => a.kind !== "info");
+  return advice.filter((a) => a.kind !== "info" && a.kind !== "wait");
+}
+
+/** ສິ່ງທີ່ຍັງຕັດສິນບໍ່ໄດ້ ແລະ ຂາດຫຍັງ — ສະແດງແຍກຈາກຄຳແນະນຳ */
+export function waiting(advice: Advice[]): Advice[] {
+  return advice.filter((a) => a.kind === "wait" || a.kind === "info");
 }

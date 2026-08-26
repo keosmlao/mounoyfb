@@ -21,7 +21,7 @@ import { totalsScope } from "@/lib/scope";
 import { AlertList } from "@/components/AlertList";
 import { buildAlerts, countActionable } from "@/lib/alerts";
 import { AdviceList } from "@/components/AdviceList";
-import { actionable, buildAdvice } from "@/lib/advice";
+import { actionable, buildAdvice, waiting } from "@/lib/advice";
 import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
@@ -91,7 +91,9 @@ export default async function DashboardPage({
 
   const total = aggregate(rows);
   const prevTotal = aggregate(prevRows);
-  const topAdvice = actionable(await buildAdvice(range)).slice(0, 3);
+  const advice = await buildAdvice(range);
+  const topAdvice = actionable(advice).slice(0, 4);
+  const blocked = waiting(advice).slice(0, 2);
   const [activeCampaigns, newLeads] = counts;
 
   // ---- ຂໍ້ມູນລາຍວັນສຳລັບກຣາຟ
@@ -156,6 +158,16 @@ export default async function DashboardPage({
             }
           />
           <AdviceList advice={topAdvice} />
+        </Card>
+      ) : null}
+
+      {blocked.length > 0 ? (
+        <Card className="mb-5">
+          <CardHeader
+            title="ຍັງຕັດສິນບໍ່ໄດ້"
+            subtitle="ຂາດຂໍ້ມູນຫຍັງ ແລະ ຕ້ອງເຮັດຫຍັງຈຶ່ງຕັດສິນໄດ້"
+          />
+          <AdviceList advice={blocked} />
         </Card>
       ) : null}
 
