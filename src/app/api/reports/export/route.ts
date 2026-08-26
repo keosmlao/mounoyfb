@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveRange } from "@/lib/date";
 import { buildReport, GROUP_BYS, type GroupBy } from "@/lib/report";
+import { isAuthenticated } from "@/lib/auth-server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,10 @@ function csvCell(value: string | number): string {
 }
 
 export async function GET(request: Request) {
+  if (!(await isAuthenticated())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(request.url);
   const range = resolveRange({
     from: url.searchParams.get("from") ?? undefined,

@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { parseDate, type DateRange } from "./date";
+import { chunkRange, countDays, parseDate, type DateRange } from "./date";
 import { InsightLevel, type EntityStatus } from "@/generated/prisma/enums";
 
 /**
@@ -422,13 +422,271 @@ const VIDEO_ACTIONS = ["video_view", "watch_video_view"];
 
 // --------------------------------------------------------------------- sync
 
+/** ໂຄງສ້າງຂອງ 1 ບັນຊີທີ່ດຶງມາແລ້ວ — ໃຊ້ຊ້ຳທຸກທ່ອນອາທິດ ບໍ່ຕ້ອງດຶງໃໝ່ */
+type AccountContext = {
+  account: { id: string; currency: string; fbAccountId: string };
+  campaignByFbId: Map<string, string>;
+  adSetByFbId: Map<string, string>;
+  adByFbId: Map<string, { id: string; adSetId: string }>;
+  fxCache: Map<string, number>;
+};
+
+/**
+ * ດຶງ/ອັບເດດໂຄງສ້າງ (campaign → ad set → ad) ຂອງ 1 ບັນຊີ.
+ * ເຮັດເທື່ອດຽວຕໍ່ການ sync 1 ຮອບ ເພາະໂຄງສ້າງບໍ່ຂຶ້ນກັບຊ່ວງວັນ.
+ */
+async function syncAccountStructure(
+  config: FbConfig,
+  account: { id: string; currency: string; fbAccountId: string | null },
+  levels: SyncLevels,
+  result: SyncResult,
+): Promise<AccountContext> {
+  const actId = account.fbAccountId as string;
+  const needsStructureBelowCampaign = levels.adset || levels.ad;
+
+  // 1) ແຄມເປນ — ດຶງສະເໝີ ເພາະ ad set / ad ຕ້ອງອ້າງອີງ
+  const fbCampaigns = await graphAll<FbCampaign>(config, `${actId}/campaigns`, {
+    fields:
+      "id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time",
+  });
+
+  for (const c of fbCampaigns) {
+    const data = {
+      name: c.name,
+      objective: mapObjective(c.objective),
+      status: mapStatus(c.status),
+      dailyBudget: money(c.daily_budget),
+      lifetimeBudget: money(c.lifetime_budget),
+      startDate: dateOnly(c.start_time),
+      endDate: dateOnly(c.stop_time),
+    };
+    await prisma.campaign.upsert({
+      where: { fbCampaignId: c.id },
+      create: { fbCampaignId: c.id, adAccountId: account.id, ...data },
+      update: data,
+    });
+    result.campaigns++;
+  }
+
+  const campaignByFbId = new Map(
+    (
+      await prisma.campaign.findMany({
+        where: { adAccountId: account.id, fbCampaignId: { not: null } },
+        select: { id: true, fbCampaignId: true },
+      })
+    ).map((c) => [c.fbCampaignId as string, c.id]),
+  );
+
+  // 2) ຊຸດໂຄສະນາ
+  if (needsStructureBelowCampaign) {
+    const fbAdSets = await graphAll<FbAdSet>(config, `${actId}/adsets`, {
+      fields:
+        "id,name,campaign_id,status,daily_budget,lifetime_budget,bid_amount,optimization_goal,billing_event,start_time,end_time,targeting",
+    });
+
+    for (const s of fbAdSets) {
+      const campaignId = campaignByFbId.get(s.campaign_id);
+      if (!campaignId) continue; // ແຄມເປນແມ່ບໍ່ຢູ່ໃນບັນຊີນີ້ — ຂ້າມ
+
+      const data = {
+        name: s.name,
+        status: mapStatus(s.status),
+        dailyBudget: money(s.daily_budget),
+        lifetimeBudget: money(s.lifetime_budget),
+        bidAmount: money(s.bid_amount),
+        optimizationGoal: s.optimization_goal ?? null,
+        billingEvent: s.billing_event ?? null,
+        audience: summarizeTargeting(s.targeting),
+        startDate: dateOnly(s.start_time),
+        endDate: dateOnly(s.end_time),
+      };
+      await prisma.adSet.upsert({
+        where: { fbAdSetId: s.id },
+        create: { fbAdSetId: s.id, campaignId, ...data },
+        update: { ...data, campaignId },
+      });
+      result.adSets++;
+    }
+  }
+
+  const adSetByFbId = new Map(
+    (
+      await prisma.adSet.findMany({
+        where: {
+          fbAdSetId: { not: null },
+          campaign: { adAccountId: account.id },
+        },
+        select: { id: true, fbAdSetId: true },
+      })
+    ).map((s) => [s.fbAdSetId as string, s.id]),
+  );
+
+  // 3) ຊິ້ນໂຄສະນາ
+  if (levels.ad) {
+    const fbAds = await graphAll<FbAd>(config, `${actId}/ads`, {
+      fields:
+        "id,name,adset_id,status,creative{thumbnail_url,title,body,object_type}",
+    });
+
+    for (const a of fbAds) {
+      const adSetId = adSetByFbId.get(a.adset_id);
+      if (!adSetId) continue;
+
+      const data = {
+        name: a.name,
+        status: mapStatus(a.status),
+        creativeType: a.creative?.object_type ?? null,
+        creativeUrl: a.creative?.thumbnail_url ?? null,
+        headline: a.creative?.title ?? null,
+        primaryText: a.creative?.body ?? null,
+      };
+      await prisma.ad.upsert({
+        where: { fbAdId: a.id },
+        create: { fbAdId: a.id, adSetId, ...data },
+        update: { ...data, adSetId },
+      });
+      result.ads++;
+    }
+  }
+
+  const adByFbId = new Map(
+    (
+      await prisma.ad.findMany({
+        where: {
+          fbAdId: { not: null },
+          adSet: { campaign: { adAccountId: account.id } },
+        },
+        select: { id: true, fbAdId: true, adSetId: true },
+      })
+    ).map((a) => [a.fbAdId as string, a]),
+  );
+
+  return {
+    account: { id: account.id, currency: account.currency, fbAccountId: actId },
+    campaignByFbId,
+    adSetByFbId,
+    adByFbId,
+    fxCache: new Map(),
+  };
+}
+
+/** ດຶງຜົນລາຍວັນ 1 ລະດັບ ຂອງ 1 ບັນຊີ ໃນຊ່ວງວັນທີ່ກຳນົດ */
+async function pullInsights(
+  config: FbConfig,
+  ctx: AccountContext,
+  range: DateRange,
+  level: InsightLevel,
+  defaultFx: number,
+  result: SyncResult,
+) {
+  const { account, campaignByFbId, adSetByFbId, adByFbId, fxCache } = ctx;
+  const fbLevel =
+    level === "CAMPAIGN" ? "campaign" : level === "ADSET" ? "adset" : "ad";
+
+  const rows = await graphAll<FbInsight>(
+    config,
+    `${account.fbAccountId}/insights`,
+    {
+      level: fbLevel,
+      time_increment: "1",
+      time_range: JSON.stringify({ since: range.from, until: range.to }),
+      fields:
+        "date_start,campaign_id,adset_id,ad_id,spend,impressions,reach,clicks,inline_link_clicks,actions,action_values",
+    },
+  );
+
+  for (const row of rows) {
+    // ຫາ id ພາຍໃນລະບົບຂອງອົງປະກອບທີ່ແຖວນີ້ເວົ້າເຖິງ
+    let campaignId = row.campaign_id
+      ? (campaignByFbId.get(row.campaign_id) ?? null)
+      : null;
+    let adSetId: string | null = null;
+    let adId: string | null = null;
+
+    if (level === "ADSET") {
+      adSetId = row.adset_id ? (adSetByFbId.get(row.adset_id) ?? null) : null;
+      if (!adSetId) continue;
+    } else if (level === "AD") {
+      const ad = row.ad_id ? adByFbId.get(row.ad_id) : undefined;
+      if (!ad) continue;
+      adId = ad.id;
+      adSetId = ad.adSetId;
+    } else if (!campaignId) {
+      continue;
+    }
+
+    // ຖ້າ Facebook ບໍ່ສົ່ງ campaign_id ມາ ໃຫ້ຖອຍໄປຫາຈາກ ad set
+    if (!campaignId && adSetId) {
+      const parent = await prisma.adSet.findUnique({
+        where: { id: adSetId },
+        select: { campaignId: true },
+      });
+      campaignId = parent?.campaignId ?? null;
+    }
+
+    const targetId =
+      level === "AD" ? adId : level === "ADSET" ? adSetId : campaignId;
+    if (!targetId) continue;
+
+    const date = parseDate(row.date_start);
+    const fxKey = `${row.date_start}:${account.currency}`;
+    let rate = fxCache.get(fxKey);
+    if (rate === undefined) {
+      rate = await fxRateFor(date, account.currency, defaultFx);
+      fxCache.set(fxKey, rate);
+    }
+
+    const spend = Number(row.spend) || 0;
+    const entityKey = `${level}:${targetId}`;
+    const data = {
+      adAccountId: account.id,
+      campaignId,
+      adSetId,
+      adId,
+      level,
+      currency: account.currency,
+      fxRateToLak: rate,
+      spend,
+      spendLak: Math.round(spend * rate),
+      impressions: Number(row.impressions) || 0,
+      reach: Number(row.reach) || 0,
+      clicks: Number(row.clicks) || 0,
+      linkClicks: Number(row.inline_link_clicks) || 0,
+      messages: actionValue(row.actions, MESSAGE_ACTIONS),
+      leadsCount: actionValue(row.actions, LEAD_ACTIONS),
+      purchases: actionValue(row.actions, PURCHASE_ACTIONS),
+      revenue: Math.round(actionValue(row.action_values, PURCHASE_ACTIONS) * rate),
+      videoViews: actionValue(row.actions, VIDEO_ACTIONS),
+      source: "API" as const,
+    };
+
+    await prisma.insight.upsert({
+      where: { date_entityKey: { date, entityKey } },
+      create: { date, entityKey, ...data },
+      update: data,
+    });
+    result.insights++;
+  }
+}
+
+/** ຄວາມຄືບໜ້າທີ່ລາຍງານກັບຫຼັງແຕ່ລະທ່ອນອາທິດ */
+export type SyncProgress = {
+  doneDays: number;
+  totalDays: number;
+  result: SyncResult;
+};
+
 /**
  * ດຶງໂຄງສ້າງ ແລະ ຜົນລາຍວັນຂອງທຸກບັນຊີໂຄສະນາທີ່ໃສ່ fbAccountId ໄວ້.
  * ດຶງລະດັບໃດແດ່ ຂຶ້ນກັບ `levels` — ແຄມເປນຖືກດຶງສະເໝີ ເພາະເປັນແມ່ຂອງລະດັບອື່ນ.
+ *
+ * ຜົນລາຍວັນຖືກແບ່ງດຶງ **ເທື່ອລະອາທິດ** ເພື່ອບໍ່ໃຫ້ຮ້ອງ API ເທື່ອດຽວຍາວຈົນ timeout
+ * ແລະ ເພື່ອລາຍງານຄວາມຄືບໜ້າຜ່ານ `onProgress` ໄດ້ລະຫວ່າງທາງ.
  */
 export async function syncFromFacebook(
   range: DateRange,
   levels: SyncLevels = DEFAULT_SYNC_LEVELS,
+  onProgress?: (progress: SyncProgress) => Promise<void> | void,
 ): Promise<SyncResult> {
   const config = await getFbConfig();
   if (!config) {
@@ -450,223 +708,32 @@ export async function syncFromFacebook(
   const defaultFx = Number(fxSetting?.value) || 21700;
 
   const result: SyncResult = { campaigns: 0, adSets: 0, ads: 0, insights: 0 };
-  const needsStructureBelowCampaign = levels.adset || levels.ad;
 
+  // 1) ໂຄງສ້າງ — ດຶງເທື່ອດຽວຕໍ່ບັນຊີ ເພາະບໍ່ຂຶ້ນກັບຊ່ວງວັນ
+  const contexts: AccountContext[] = [];
   for (const account of accounts) {
-    const actId = account.fbAccountId as string;
+    contexts.push(await syncAccountStructure(config, account, levels, result));
+  }
 
-    // 1) ແຄມເປນ — ດຶງສະເໝີ ເພາະ ad set / ad ຕ້ອງອ້າງອີງ
-    const fbCampaigns = await graphAll<FbCampaign>(config, `${actId}/campaigns`, {
-      fields:
-        "id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time",
-    });
+  // 2) ຜົນລາຍວັນ — ວົນເທື່ອລະອາທິດ ແລ້ວລາຍງານຄວາມຄືບໜ້າ
+  const chunks = chunkRange(range, 7);
+  const totalDays = countDays(range);
+  let doneDays = 0;
 
-    for (const c of fbCampaigns) {
-      const data = {
-        name: c.name,
-        objective: mapObjective(c.objective),
-        status: mapStatus(c.status),
-        dailyBudget: money(c.daily_budget),
-        lifetimeBudget: money(c.lifetime_budget),
-        startDate: dateOnly(c.start_time),
-        endDate: dateOnly(c.stop_time),
-      };
-      await prisma.campaign.upsert({
-        where: { fbCampaignId: c.id },
-        create: { fbCampaignId: c.id, adAccountId: account.id, ...data },
-        update: data,
-      });
-      result.campaigns++;
-    }
-
-    const campaignByFbId = new Map(
-      (
-        await prisma.campaign.findMany({
-          where: { adAccountId: account.id, fbCampaignId: { not: null } },
-          select: { id: true, fbCampaignId: true },
-        })
-      ).map((c) => [c.fbCampaignId as string, c.id]),
-    );
-
-    // 2) ຊຸດໂຄສະນາ
-    if (needsStructureBelowCampaign) {
-      const fbAdSets = await graphAll<FbAdSet>(config, `${actId}/adsets`, {
-        fields:
-          "id,name,campaign_id,status,daily_budget,lifetime_budget,bid_amount,optimization_goal,billing_event,start_time,end_time,targeting",
-      });
-
-      for (const s of fbAdSets) {
-        const campaignId = campaignByFbId.get(s.campaign_id);
-        if (!campaignId) continue; // ແຄມເປນແມ່ບໍ່ຢູ່ໃນບັນຊີນີ້ — ຂ້າມ
-
-        const data = {
-          name: s.name,
-          status: mapStatus(s.status),
-          dailyBudget: money(s.daily_budget),
-          lifetimeBudget: money(s.lifetime_budget),
-          bidAmount: money(s.bid_amount),
-          optimizationGoal: s.optimization_goal ?? null,
-          billingEvent: s.billing_event ?? null,
-          audience: summarizeTargeting(s.targeting),
-          startDate: dateOnly(s.start_time),
-          endDate: dateOnly(s.end_time),
-        };
-        await prisma.adSet.upsert({
-          where: { fbAdSetId: s.id },
-          create: { fbAdSetId: s.id, campaignId, ...data },
-          update: { ...data, campaignId },
-        });
-        result.adSets++;
+  for (const chunk of chunks) {
+    for (const ctx of contexts) {
+      // ລະດັບແຄມເປນດຶງສະເໝີ ເພາະຍອດລວມທັງລະບົບນັບຈາກແຖວລະດັບນີ້ (ເບິ່ງ lib/scope.ts)
+      await pullInsights(config, ctx, chunk, InsightLevel.CAMPAIGN, defaultFx, result);
+      if (levels.adset) {
+        await pullInsights(config, ctx, chunk, InsightLevel.ADSET, defaultFx, result);
+      }
+      if (levels.ad) {
+        await pullInsights(config, ctx, chunk, InsightLevel.AD, defaultFx, result);
       }
     }
 
-    const adSetByFbId = new Map(
-      (
-        await prisma.adSet.findMany({
-          where: {
-            fbAdSetId: { not: null },
-            campaign: { adAccountId: account.id },
-          },
-          select: { id: true, fbAdSetId: true },
-        })
-      ).map((s) => [s.fbAdSetId as string, s.id]),
-    );
-
-    // 3) ຊິ້ນໂຄສະນາ
-    if (levels.ad) {
-      const fbAds = await graphAll<FbAd>(config, `${actId}/ads`, {
-        fields:
-          "id,name,adset_id,status,creative{thumbnail_url,title,body,object_type}",
-      });
-
-      for (const a of fbAds) {
-        const adSetId = adSetByFbId.get(a.adset_id);
-        if (!adSetId) continue;
-
-        const data = {
-          name: a.name,
-          status: mapStatus(a.status),
-          creativeType: a.creative?.object_type ?? null,
-          creativeUrl: a.creative?.thumbnail_url ?? null,
-          headline: a.creative?.title ?? null,
-          primaryText: a.creative?.body ?? null,
-        };
-        await prisma.ad.upsert({
-          where: { fbAdId: a.id },
-          create: { fbAdId: a.id, adSetId, ...data },
-          update: { ...data, adSetId },
-        });
-        result.ads++;
-      }
-    }
-
-    const adByFbId = new Map(
-      (
-        await prisma.ad.findMany({
-          where: {
-            fbAdId: { not: null },
-            adSet: { campaign: { adAccountId: account.id } },
-          },
-          select: { id: true, fbAdId: true, adSetId: true },
-        })
-      ).map((a) => [a.fbAdId as string, a]),
-    );
-
-    // 4) ຜົນລາຍວັນ ຂອງແຕ່ລະລະດັບທີ່ເລືອກ
-    const fxCache = new Map<string, number>();
-
-    const pullInsights = async (level: InsightLevel) => {
-      const fbLevel =
-        level === "CAMPAIGN" ? "campaign" : level === "ADSET" ? "adset" : "ad";
-
-      const rows = await graphAll<FbInsight>(config, `${actId}/insights`, {
-        level: fbLevel,
-        time_increment: "1",
-        time_range: JSON.stringify({ since: range.from, until: range.to }),
-        fields:
-          "date_start,campaign_id,adset_id,ad_id,spend,impressions,reach,clicks,inline_link_clicks,actions,action_values",
-      });
-
-      for (const row of rows) {
-        // ຫາ id ພາຍໃນລະບົບຂອງອົງປະກອບທີ່ແຖວນີ້ເວົ້າເຖິງ
-        let campaignId = row.campaign_id
-          ? (campaignByFbId.get(row.campaign_id) ?? null)
-          : null;
-        let adSetId: string | null = null;
-        let adId: string | null = null;
-
-        if (level === "ADSET") {
-          adSetId = row.adset_id ? (adSetByFbId.get(row.adset_id) ?? null) : null;
-          if (!adSetId) continue;
-        } else if (level === "AD") {
-          const ad = row.ad_id ? adByFbId.get(row.ad_id) : undefined;
-          if (!ad) continue;
-          adId = ad.id;
-          adSetId = ad.adSetId;
-        } else if (!campaignId) {
-          continue;
-        }
-
-        // ຖ້າ Facebook ບໍ່ສົ່ງ campaign_id ມາ ໃຫ້ຖອຍໄປຫາຈາກ ad set
-        if (!campaignId && adSetId) {
-          const parent = await prisma.adSet.findUnique({
-            where: { id: adSetId },
-            select: { campaignId: true },
-          });
-          campaignId = parent?.campaignId ?? null;
-        }
-
-        const targetId =
-          level === "AD" ? adId : level === "ADSET" ? adSetId : campaignId;
-        if (!targetId) continue;
-
-        const date = parseDate(row.date_start);
-        const fxKey = `${row.date_start}:${account.currency}`;
-        let rate = fxCache.get(fxKey);
-        if (rate === undefined) {
-          rate = await fxRateFor(date, account.currency, defaultFx);
-          fxCache.set(fxKey, rate);
-        }
-
-        const spend = Number(row.spend) || 0;
-        const entityKey = `${level}:${targetId}`;
-        const data = {
-          adAccountId: account.id,
-          campaignId,
-          adSetId,
-          adId,
-          level,
-          currency: account.currency,
-          fxRateToLak: rate,
-          spend,
-          spendLak: Math.round(spend * rate),
-          impressions: Number(row.impressions) || 0,
-          reach: Number(row.reach) || 0,
-          clicks: Number(row.clicks) || 0,
-          linkClicks: Number(row.inline_link_clicks) || 0,
-          messages: actionValue(row.actions, MESSAGE_ACTIONS),
-          leadsCount: actionValue(row.actions, LEAD_ACTIONS),
-          purchases: actionValue(row.actions, PURCHASE_ACTIONS),
-          revenue: Math.round(
-            actionValue(row.action_values, PURCHASE_ACTIONS) * rate,
-          ),
-          videoViews: actionValue(row.actions, VIDEO_ACTIONS),
-          source: "API" as const,
-        };
-
-        await prisma.insight.upsert({
-          where: { date_entityKey: { date, entityKey } },
-          create: { date, entityKey, ...data },
-          update: data,
-        });
-        result.insights++;
-      }
-    };
-
-    // ລະດັບແຄມເປນດຶງສະເໝີ ເພາະຍອດລວມທັງລະບົບນັບຈາກແຖວລະດັບນີ້ (ເບິ່ງ lib/scope.ts)
-    await pullInsights(InsightLevel.CAMPAIGN);
-    if (levels.adset) await pullInsights(InsightLevel.ADSET);
-    if (levels.ad) await pullInsights(InsightLevel.AD);
+    doneDays += countDays(chunk);
+    await onProgress?.({ doneDays, totalDays, result });
   }
 
   return result;
@@ -718,27 +785,113 @@ async function fxRateFor(
   return rate?.rateToLak ?? fallback;
 }
 
-/** ຫໍ່ການ sync ໄວ້ພ້ອມບັນທຶກ log ເພື່ອໃຫ້ຕິດຕາມໄດ້ວ່າແລ່ນເມື່ອໃດ ສຳເລັດບໍ່ */
-export async function runSyncWithLog(range: DateRange, levels: SyncLevels) {
-  const chosen = (["campaign", "adset", "ad"] as const).filter((k) => levels[k]);
+/**
+ * ວຽກ sync ທີ່ຄ້າງດົນກວ່ານີ້ຖືວ່າຕາຍໄປແລ້ວ (ເຊັ່ນ ເຊີບເວີ restart ກາງຄັນ)
+ * ເພາະວຽກອັບເດດຄວາມຄືບໜ້າທຸກໆອາທິດທີ່ດຶງຈົບ
+ */
+const STALE_AFTER_MS = 15 * 60 * 1000;
 
-  const log = await prisma.syncLog.create({
-    data: {
+/** ປິດວຽກທີ່ຄ້າງໄວ້ໃຫ້ເປັນ "ຜິດພາດ" — ບໍ່ດັ່ງນັ້ນຈະ sync ໃໝ່ບໍ່ໄດ້ຕະຫຼອດ */
+async function closeStaleRuns() {
+  await prisma.syncLog.updateMany({
+    where: {
       status: "RUNNING",
-      level: chosen.join(", ") || "campaign",
-      dateFrom: parseDate(range.from),
-      dateTo: parseDate(range.to),
+      updatedAt: { lt: new Date(Date.now() - STALE_AFTER_MS) },
+    },
+    data: {
+      status: "FAILED",
+      finishedAt: new Date(),
+      message: "ຂາດການຕິດຕໍ່ກາງຄັນ (ເຊີບເວີອາດ restart) — ກົດດຶງໃໝ່ໄດ້",
     },
   });
+}
+
+/** ວຽກ sync ທີ່ກຳລັງແລ່ນຢູ່ດຽວນີ້ (null = ບໍ່ມີ) */
+export async function activeSyncLog() {
+  await closeStaleRuns();
+  return prisma.syncLog.findFirst({
+    where: { status: "RUNNING" },
+    orderBy: { startedAt: "desc" },
+  });
+}
+
+/**
+ * ສ້າງແຖວ log ແລ້ວຄືນທັນທີ — ຍັງບໍ່ທັນດຶງຂໍ້ມູນ.
+ * ຮັບປະກັນວ່າມີວຽກແລ່ນຢູ່ໄດ້ເທື່ອລະອັນ ເພື່ອບໍ່ໃຫ້ 2 ວຽກຂຽນທັບກັນ.
+ */
+export async function startSyncLog(range: DateRange, levels: SyncLevels) {
+  const running = await activeSyncLog();
+  if (running) {
+    throw new Error("ມີການດຶງຂໍ້ມູນແລ່ນຢູ່ແລ້ວ — ລໍໃຫ້ຮອບນີ້ຈົບກ່ອນ");
+  }
+
+  const chosen = (["campaign", "adset", "ad"] as const).filter((k) => levels[k]);
 
   try {
-    const result = await syncFromFacebook(range, levels);
+    return await prisma.syncLog.create({
+      data: {
+        status: "RUNNING",
+        level: chosen.join(", ") || "campaign",
+        dateFrom: parseDate(range.from),
+        dateTo: parseDate(range.to),
+        totalDays: countDays(range),
+        message: "ກຳລັງດຶງໂຄງສ້າງແຄມເປນ...",
+      },
+    });
+  } catch (error) {
+    // Database unique index is the final guard against two concurrent requests.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "P2002"
+    ) {
+      throw new Error("ມີການດຶງຂໍ້ມູນແລ່ນຢູ່ແລ້ວ — ລໍໃຫ້ຮອບນີ້ຈົບກ່ອນ");
+    }
+    throw error;
+  }
+}
+
+/**
+ * ແລ່ນການ sync ຈິງ — ຖືກເອີ້ນ **ເບື້ອງຫຼັງ** ຫຼັງຈາກຕອບ request ໄປແລ້ວ
+ * ຈຶ່ງບໍ່ throw ອອກມາ ແຕ່ບັນທຶກຜົນລົງ SyncLog ໃຫ້ໜ້າຈໍໄປອ່ານແທນ.
+ */
+export async function runSyncJob(
+  logId: string,
+  range: DateRange,
+  levels: SyncLevels,
+) {
+  // Touch updatedAt while a long API request/structure import is still active.
+  // This prevents the UI's stale-job cleanup from closing a healthy job.
+  const heartbeat = setInterval(() => {
+    void prisma.syncLog
+      .updateMany({
+        where: { id: logId, status: "RUNNING" },
+        data: { updatedAt: new Date() },
+      })
+      .catch(() => undefined);
+  }, 60_000);
+  heartbeat.unref();
+
+  try {
+    const result = await syncFromFacebook(range, levels, async (progress) => {
+      await prisma.syncLog.update({
+        where: { id: logId },
+        data: {
+          doneDays: progress.doneDays,
+          recordCount: progress.result.insights,
+          message: `ດຶງແລ້ວ ${progress.doneDays}/${progress.totalDays} ວັນ`,
+        },
+      });
+    });
+
     await prisma.syncLog.update({
-      where: { id: log.id },
+      where: { id: logId },
       data: {
         status: "SUCCESS",
         finishedAt: new Date(),
         recordCount: result.insights,
+        doneDays: countDays(range),
         message:
           `ແຄມເປນ ${result.campaigns} · ຊຸດ ${result.adSets} · ໂຄສະນາ ${result.ads} · ` +
           `ຜົນລາຍວັນ ${result.insights} ແຖວ (${range.from} — ${range.to})`,
@@ -747,13 +900,15 @@ export async function runSyncWithLog(range: DateRange, levels: SyncLevels) {
     return result;
   } catch (error) {
     await prisma.syncLog.update({
-      where: { id: log.id },
+      where: { id: logId },
       data: {
         status: "FAILED",
         finishedAt: new Date(),
         message: error instanceof Error ? error.message : String(error),
       },
     });
-    throw error;
+    return null;
+  } finally {
+    clearInterval(heartbeat);
   }
 }

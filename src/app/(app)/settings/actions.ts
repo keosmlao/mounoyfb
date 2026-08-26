@@ -1,13 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-server";
 import { bool, num, reqDate, reqStr, str } from "@/lib/form";
-import { resolveRange } from "@/lib/date";
+import { countDays, parseDate, resolveRange } from "@/lib/date";
 import {
   fetchFbAssets,
   importFbAssets,
-  runSyncWithLog,
+  runSyncJob,
+  startSyncLog,
   type FbAssetAccount,
   type FbAssetPage,
 } from "@/lib/fb";
@@ -26,6 +29,7 @@ async function put(key: string, value: string | null) {
 }
 
 export async function saveSettings(fd: FormData) {
+  await requireSession();
   await put("companyName", str(fd, "companyName"));
   await put("defaultFxRateToLak", String(num(fd, "defaultFxRateToLak") ?? 21700));
   await put("fbApiVersion", str(fd, "fbApiVersion"));
@@ -49,6 +53,7 @@ export type FbConnectionState = {
 } | null;
 
 export async function testFbConnection(): Promise<FbConnectionState> {
+  await requireSession();
   try {
     const assets = await fetchFbAssets();
     return {
@@ -71,6 +76,7 @@ export async function testFbConnection(): Promise<FbConnectionState> {
 }
 
 export async function importFbAssetsAction(): Promise<FbConnectionState> {
+  await requireSession();
   try {
     const result = await importFbAssets();
     revalidatePath("/settings");
@@ -89,6 +95,7 @@ export async function importFbAssetsAction(): Promise<FbConnectionState> {
 }
 
 export async function saveAlertThresholds(fd: FormData) {
+  await requireSession();
   for (const [field, key] of Object.entries(THRESHOLD_KEYS) as [
     keyof typeof THRESHOLD_KEYS,
     string,
@@ -102,6 +109,7 @@ export async function saveAlertThresholds(fd: FormData) {
 }
 
 export async function saveExchangeRate(fd: FormData) {
+  await requireSession();
   const date = reqDate(fd, "date", "ວັນທີ່");
   const currency = reqStr(fd, "currency", "ສະກຸນເງິນ");
   const rateToLak = num(fd, "rateToLak") ?? 0;
@@ -116,12 +124,21 @@ export async function saveExchangeRate(fd: FormData) {
   revalidatePath("/settings");
 }
 
-/** ດຶງຂໍ້ມູນຈາກ Facebook — ຜົນລັບ (ສຳເລັດ/ຜິດພາດ) ຖືກບັນທຶກໄວ້ໃນ SyncLog */
+/**
+ * ເລີ່ມການດຶງຂໍ້ມູນຈາກ Facebook — ຄືນທັນທີ ບໍ່ລໍໃຫ້ດຶງຈົບ.
+ * ວຽກຈິງແລ່ນເບື້ອງຫຼັງດ້ວຍ `after()` ເພື່ອໃຫ້ request ຕອບກັບທັນທີ.
+ * ການ deploy ຕ້ອງໃຫ້ process/invocation ມີເວລາພໍຈົນ callback ແລ່ນຈົບ.
+ * ຄວາມຄືບໜ້າ ແລະ ຜົນລັບຢູ່ໃນ SyncLog ຊຶ່ງໜ້າຕັ້ງຄ່າດຶງໄປສະແດງ.
+ */
 export async function runFacebookSync(fd: FormData) {
+  await requireSession();
   const range = resolveRange({
     from: str(fd, "from") ?? undefined,
     to: str(fd, "to") ?? undefined,
   });
+  if (countDays(range) > 366) {
+    throw new Error("ການ sync 1 ຄັ້ງເລືອກໄດ້ສູງສຸດ 366 ວັນ");
+  }
 
   const levels = {
     campaign: bool(fd, "levelCampaign"),
@@ -132,11 +149,22 @@ export async function runFacebookSync(fd: FormData) {
   if (!levels.campaign && !levels.adset && !levels.ad) levels.campaign = true;
 
   try {
-    await runSyncWithLog(range, levels);
-  } catch {
-    // ຂໍ້ຄວາມຜິດພາດຖືກເກັບໄວ້ໃນ SyncLog ແລ້ວ ແລະ ສະແດງຢູ່ຕາຕະລາງລຸ່ມໜ້ານີ້
+    const log = await startSyncLog(range, levels);
+    // ແລ່ນຫຼັງຈາກຕອບໜ້າຈໍໄປແລ້ວ — runSyncJob ຈັດການ error ເອງລົງ SyncLog
+    after(() => runSyncJob(log.id, range, levels));
+  } catch (error) {
+    // ເລີ່ມບໍ່ໄດ້ (ເຊັ່ນ ມີວຽກແລ່ນຢູ່ແລ້ວ) — ບັນທຶກໄວ້ໃຫ້ເຫັນໃນປະຫວັດ
+    await prisma.syncLog.create({
+      data: {
+        status: "FAILED",
+        finishedAt: new Date(),
+        level: "campaign",
+        dateFrom: parseDate(range.from),
+        dateTo: parseDate(range.to),
+        message: error instanceof Error ? error.message : String(error),
+      },
+    });
   }
 
   revalidatePath("/settings");
-  revalidatePath("/");
 }

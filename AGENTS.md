@@ -27,4 +27,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ອັດຕາສ່ວນລາຍວັນ — ຄ່າສະເລ່ຍຂອງ CTR/ROAS ລາຍວັນຈະໃຫ້ຄຳຕອບຜິດ.
 - **ສີກຣາຟໃນ `globals.css` (`--chart-1..5`) ຜ່ານການກວດ CVD/contrast ແລ້ວ** —
   ຖ້າຈະປ່ຽນ ຕ້ອງກວດຄືນ ແລະ ຫ້າມສັບປ່ຽນລຳດັບ.
-- **ຍັງບໍ່ມີລະບົບ login ໂດຍເຈຕະນາ.** ຢ່າ deploy ອອກສູ່ອິນເຕີເນັດແບບນີ້.
+- **ທຸກ route ຖືກກັນດ້ວຍ `src/proxy.ts`** (Next 16 ປ່ຽນຊື່ middleware → proxy).
+  ໜ້າໃໝ່ທີ່ຕ້ອງ login ໃຫ້ວາງໃນ `src/app/(app)/` — route group ບໍ່ປ່ຽນ URL.
+  `src/lib/auth.ts` ຖືກ import ຈາກ proxy ຈຶ່ງ **ຫ້າມ import prisma ຫຼື node:crypto**
+  ໃສ່ໄຟລ໌ນັ້ນ (ໃຊ້ໄດ້ແຕ່ Web Crypto).
+- **ການ sync ແລ່ນເບື້ອງຫຼັງ** ດ້ວຍ `after()` ແລະ ແບ່ງດຶງເທື່ອລະອາທິດ.
+  ຄວາມຄືບໜ້າຢູ່ `SyncLog.doneDays/totalDays` — ວຽກທີ່ `updatedAt` ເກົ່າກວ່າ
+  15 ນາທີຖືວ່າຕາຍ ແລະ ຖືກປິດອັດຕະໂນມັດໂດຍ `activeSyncLog()`;
+  `runSyncJob()` heartbeat ອັບເດດຄ່ານີ້ທຸກ 1 ນາທີລະຫວ່າງວຽກຍາວ.
+- **ຢ່າ deploy ອອກອິນເຕີເນັດແບບ http** — ຕັ້ງ `COOKIE_SECURE=1` ພ້ອມ HTTPS ກ່ອນ.

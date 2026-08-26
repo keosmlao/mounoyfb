@@ -319,16 +319,23 @@ model AppSetting {
 }
 
 /// ບັນທຶກການ sync ຈາກ Facebook API
+/// ແລ່ນເບື້ອງຫຼັງ ແລະ ແບ່ງດຶງເທື່ອລະອາທິດ — `doneDays/totalDays` ຄືຄວາມຄືບໜ້າ
+/// ທີ່ໜ້າຕັ້ງຄ່າດຶງໄປສະແດງ. `updatedAt` ໃຊ້ກວດວ່າວຽກຄ້າງ (ເຊີບເວີດັບກາງຄັນ)
 model SyncLog {
   id          String     @id @default(cuid())
   startedAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   finishedAt  DateTime?
   status      SyncStatus @default(RUNNING)
   level       String?
   dateFrom    DateTime?  @db.Date
   dateTo      DateTime?  @db.Date
   recordCount Int        @default(0)
+  /// ຈຳນວນວັນທັງໝົດທີ່ຕ້ອງດຶງ ແລະ ດຶງແລ້ວ — ໃຊ້ສະແດງແຖບຄວາມຄືບໜ້າ
+  totalDays   Int        @default(0)
+  doneDays    Int        @default(0)
   message     String?
 
   @@index([startedAt])
+  @@index([status])
 }

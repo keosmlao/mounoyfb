@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-server";
 import { enumVal, reqStr, str } from "@/lib/form";
 import { EntityStatus } from "@/generated/prisma/enums";
 
@@ -19,18 +20,21 @@ function readForm(fd: FormData) {
 }
 
 export async function createFbPage(fd: FormData) {
+  await requireSession();
   await prisma.fbPage.create({ data: readForm(fd) });
   revalidatePath("/fb-pages");
   redirect("/fb-pages");
 }
 
 export async function updateFbPage(id: string, fd: FormData) {
+  await requireSession();
   await prisma.fbPage.update({ where: { id }, data: readForm(fd) });
   revalidatePath("/fb-pages");
   redirect("/fb-pages");
 }
 
 export async function deleteFbPage(id: string) {
+  await requireSession();
   await prisma.fbPage.delete({ where: { id } });
   revalidatePath("/fb-pages");
   redirect("/fb-pages");

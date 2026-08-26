@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-server";
 import { date, enumVal, num, reqStr, str } from "@/lib/form";
 import { CampaignObjective, EntityStatus } from "@/generated/prisma/enums";
 
@@ -31,12 +32,14 @@ function readCampaign(fd: FormData) {
 }
 
 export async function createCampaign(fd: FormData) {
+  await requireSession();
   const campaign = await prisma.campaign.create({ data: readCampaign(fd) });
   revalidatePath("/campaigns");
   redirect(`/campaigns/${campaign.id}`);
 }
 
 export async function updateCampaign(id: string, fd: FormData) {
+  await requireSession();
   await prisma.campaign.update({ where: { id }, data: readCampaign(fd) });
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
@@ -44,6 +47,7 @@ export async function updateCampaign(id: string, fd: FormData) {
 }
 
 export async function deleteCampaign(id: string) {
+  await requireSession();
   await prisma.campaign.delete({ where: { id } });
   revalidatePath("/campaigns");
   redirect("/campaigns");
@@ -51,6 +55,7 @@ export async function deleteCampaign(id: string) {
 
 /** ປ່ຽນສະຖານະໄວຈາກໜ້າລາຍການ (ຢຸດ / ຍິງຕໍ່) */
 export async function toggleCampaignStatus(id: string, next: EntityStatus) {
+  await requireSession();
   await prisma.campaign.update({ where: { id }, data: { status: next } });
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
@@ -77,12 +82,14 @@ function readAdSet(fd: FormData) {
 }
 
 export async function createAdSet(campaignId: string, fd: FormData) {
+  await requireSession();
   await prisma.adSet.create({ data: { ...readAdSet(fd), campaignId } });
   revalidatePath(`/campaigns/${campaignId}`);
   redirect(`/campaigns/${campaignId}`);
 }
 
 export async function updateAdSet(id: string, fd: FormData) {
+  await requireSession();
   const adSet = await prisma.adSet.update({
     where: { id },
     data: readAdSet(fd),
@@ -93,6 +100,7 @@ export async function updateAdSet(id: string, fd: FormData) {
 }
 
 export async function deleteAdSet(id: string) {
+  await requireSession();
   const adSet = await prisma.adSet.delete({ where: { id } });
   revalidatePath(`/campaigns/${adSet.campaignId}`);
   redirect(`/campaigns/${adSet.campaignId}`);
@@ -116,18 +124,21 @@ function readAd(fd: FormData) {
 }
 
 export async function createAd(adSetId: string, fd: FormData) {
+  await requireSession();
   await prisma.ad.create({ data: { ...readAd(fd), adSetId } });
   revalidatePath(`/ad-sets/${adSetId}`);
   redirect(`/ad-sets/${adSetId}`);
 }
 
 export async function updateAd(id: string, fd: FormData) {
+  await requireSession();
   const ad = await prisma.ad.update({ where: { id }, data: readAd(fd) });
   revalidatePath(`/ad-sets/${ad.adSetId}`);
   redirect(`/ad-sets/${ad.adSetId}`);
 }
 
 export async function deleteAd(id: string) {
+  await requireSession();
   const ad = await prisma.ad.delete({ where: { id } });
   revalidatePath(`/ad-sets/${ad.adSetId}`);
   redirect(`/ad-sets/${ad.adSetId}`);

@@ -5,6 +5,7 @@ import { AdAccountForm } from "@/components/AdAccountForm";
 import { createAdAccount } from "./actions";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/labels";
 import { formatInt, formatLak } from "@/lib/format";
+import { totalsScope } from "@/lib/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function AdAccountsPage() {
 
   const spendByAccount = await prisma.insight.groupBy({
     by: ["adAccountId"],
+    where: totalsScope,
     _sum: { spendLak: true, impressions: true },
   });
   const spendMap = new Map(

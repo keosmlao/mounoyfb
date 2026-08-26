@@ -33,7 +33,7 @@ export default async function InsightsPage({
   const dateStr = sp.date ?? addDays(todayStr(), -1); // ປົກກະຕິບັນທຶກຜົນຂອງມື້ວານ
   const date = parseDate(dateStr);
 
-  const [accounts, campaigns, existing, recent, savedRate] = await Promise.all([
+  const [accounts, campaigns, existing, recent, savedRates, fxSetting] = await Promise.all([
     prisma.adAccount.findMany({ orderBy: { name: "asc" } }),
     prisma.campaign.findMany({
       where: {
@@ -57,20 +57,30 @@ export default async function InsightsPage({
         adAccount: { select: { name: true } },
       },
     }),
-    prisma.exchangeRate.findFirst({
-      where: { currency: "USD" },
+    prisma.exchangeRate.findMany({
       orderBy: { date: "desc" },
     }),
+    prisma.appSetting.findUnique({ where: { key: "defaultFxRateToLak" } }),
   ]);
 
   const existingByCampaign = new Map(
     existing.filter((r) => r.campaignId).map((r) => [r.campaignId as string, r]),
   );
 
-  const defaultFx =
-    existing.find((r) => r.fxRateToLak > 1)?.fxRateToLak ??
-    savedRate?.rateToLak ??
-    21700;
+  const latestRateByCurrency = new Map<string, number>();
+  for (const rate of savedRates) {
+    if (!latestRateByCurrency.has(rate.currency)) {
+      latestRateByCurrency.set(rate.currency, rate.rateToLak);
+    }
+  }
+  const currencies = [...new Set(campaigns.map((c) => c.adAccount.currency))];
+  const defaultFx = Number(fxSetting?.value) || 21700;
+  const rateFor = (currency: string) =>
+    currency === "LAK"
+      ? 1
+      : (existing.find((r) => r.currency === currency)?.fxRateToLak ??
+        latestRateByCurrency.get(currency) ??
+        defaultFx);
 
   const dayTotal = existing.reduce(
     (acc, r) => {
@@ -164,19 +174,21 @@ export default async function InsightsPage({
             <input type="hidden" name="date" value={dateStr} />
 
             <div className="flex flex-wrap items-end gap-3 border-b border-[var(--border)] px-4 py-3">
-              <div>
-                <label className="label">ອັດຕາແລກປ່ຽນ 1 USD = ? ກີບ</label>
-                <input
-                  name="fxRateToLak"
-                  type="number"
-                  step="1"
-                  min="1"
-                  defaultValue={defaultFx}
-                  className="field w-40"
-                />
-              </div>
+              {currencies.filter((currency) => currency !== "LAK").map((currency) => (
+                <div key={currency}>
+                  <label className="label">ອັດຕາ 1 {currency} = ? ກີບ</label>
+                  <input
+                    name={`fxRateToLak_${currency}`}
+                    type="number"
+                    step="1"
+                    min="1"
+                    defaultValue={rateFor(currency)}
+                    className="field w-40"
+                  />
+                </div>
+              ))}
               <p className="pb-2 text-xs text-[var(--fg-subtle)]">
-                ໃຊ້ແປງຄ່າໂຄສະນາເປັນກີບ — ນຳໃຊ້ກັບທຸກແຖວໃນວັນນີ້
+                ແຕ່ລະສະກຸນໃຊ້ອັດຕາແຍກກັນ; ບັນຊີ LAK ໃຊ້ອັດຕາ 1 ອັດຕະໂນມັດ
               </p>
             </div>
 

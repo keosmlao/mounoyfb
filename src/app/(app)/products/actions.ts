@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-server";
 import { bool, num0, reqStr, str } from "@/lib/form";
 
 function readForm(fd: FormData) {
@@ -18,18 +19,21 @@ function readForm(fd: FormData) {
 }
 
 export async function createProduct(fd: FormData) {
+  await requireSession();
   await prisma.product.create({ data: readForm(fd) });
   revalidatePath("/products");
   redirect("/products");
 }
 
 export async function updateProduct(id: string, fd: FormData) {
+  await requireSession();
   await prisma.product.update({ where: { id }, data: readForm(fd) });
   revalidatePath("/products");
   redirect("/products");
 }
 
 export async function deleteProduct(id: string) {
+  await requireSession();
   await prisma.product.delete({ where: { id } });
   revalidatePath("/products");
   redirect("/products");

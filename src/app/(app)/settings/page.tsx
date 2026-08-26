@@ -10,9 +10,11 @@ import {
 import { getThresholds } from "@/lib/alerts";
 import { FbTokenGuide } from "@/components/FbTokenGuide";
 import { FbConnection } from "@/components/FbConnection";
+import { SyncProgress } from "@/components/SyncProgress";
 import { addDays, formatDateLao, todayStr } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
+import { activeSyncLog } from "@/lib/fb";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,9 @@ const SYNC_LABEL: Record<string, string> = {
 };
 
 export default async function SettingsPage() {
+  // ກວດວຽກທີ່ຄ້າງກ່ອນ ຈຶ່ງອ່ານປະຫວັດ — ວຽກທີ່ຕາຍໄປແລ້ວຈະຖືກປິດເປັນ "ຜິດພາດ"
+  const running = await activeSyncLog();
+
   const [settings, rates, logs, accountsWithId, thresholds] = await Promise.all([
     prisma.appSetting.findMany(),
     prisma.exchangeRate.findMany({ orderBy: { date: "desc" }, take: 15 }),
@@ -119,11 +124,23 @@ export default async function SettingsPage() {
               title="ດຶງຂໍ້ມູນຈາກ Facebook"
               subtitle={
                 hasToken
-                  ? `${accountsWithId} ບັນຊີພ້ອມ sync — ຂໍ້ມູນ Facebook ຈະທັບແຖວວັນ/ແຄມເປນດຽວກັນ`
+                  ? `${accountsWithId} ບັນຊີພ້ອມ sync — ດຶງເທື່ອລະອາທິດຢູ່ເບື້ອງຫຼັງ, ຂໍ້ມູນ Facebook ຈະທັບແຖວວັນ/ແຄມເປນດຽວກັນ`
                   : "ຕ້ອງໃສ່ access token ກ່ອນຈຶ່ງ sync ໄດ້"
               }
             />
+            {running ? (
+              <SyncProgress
+                doneDays={running.doneDays}
+                totalDays={running.totalDays}
+                message={running.message}
+                startedAt={running.startedAt.toLocaleTimeString("en-GB", {
+                  timeZone: "Asia/Vientiane",
+                  hour12: false,
+                })}
+              />
+            ) : null}
             <form action={runFacebookSync} className="grid gap-4 p-4 sm:grid-cols-2">
+              <input type="hidden" name="levelCampaign" value="1" />
               <Field label="ແຕ່ວັນທີ່">
                 <input
                   name="from"
@@ -171,10 +188,18 @@ export default async function SettingsPage() {
               </fieldset>
 
               <div className="sm:col-span-2">
-                <SubmitButton pendingText="ກຳລັງດຶງຂໍ້ມູນ...">
+                <SubmitButton
+                  className={`btn btn-primary${running ? " pointer-events-none opacity-50" : ""}`}
+                  pendingText="ກຳລັງເລີ່ມ..."
+                  disabled={Boolean(running)}
+                >
                   ດຶງຂໍ້ມູນດຽວນີ້
                 </SubmitButton>
-                {!hasToken ? (
+                {running ? (
+                  <p className="mt-2 text-xs text-[var(--fg-subtle)]">
+                    ມີວຽກແລ່ນຢູ່ແລ້ວ — ລໍໃຫ້ຮອບນີ້ຈົບກ່ອນຈຶ່ງເລີ່ມໃໝ່ໄດ້
+                  </p>
+                ) : !hasToken ? (
                   <p className="mt-2 text-xs text-[var(--fg-subtle)]">
                     ບໍ່ມີ token — ການກົດຈະບັນທຶກເປັນ “ຜິດພາດ” ໄວ້ໃນປະຫວັດລຸ່ມນີ້
                   </p>

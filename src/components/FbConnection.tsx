@@ -5,7 +5,7 @@ import {
   importFbAssetsAction,
   testFbConnection,
   type FbConnectionState,
-} from "@/app/settings/actions";
+} from "@/app/(app)/settings/actions";
 
 /**
  * ທົດສອບ token ແລ້ວສະແດງບັນຊີ/ເພຈ ທີ່ເຂົ້າເຖິງໄດ້ ພ້ອມປຸ່ມນຳເຂົ້າ —

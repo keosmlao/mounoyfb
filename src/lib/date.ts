@@ -5,7 +5,14 @@
 
 /** "2026-07-26" → Date (UTC midnight) */
 export function parseDate(value: string): Date {
-  return new Date(`${value}T00:00:00.000Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`ວັນທີ່ບໍ່ຖືກຕ້ອງ: ${value}`);
+  }
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw new Error(`ວັນທີ່ບໍ່ຖືກຕ້ອງ: ${value}`);
+  }
+  return date;
 }
 
 /** Date → "2026-07-26" */
@@ -85,7 +92,7 @@ export function eachDay({ from, to }: DateRange): string[] {
 
 /** ຊ່ວງກ່ອນໜ້າທີ່ຍາວເທົ່າກັນ — ໃຊ້ປຽບທຽບ % ການປ່ຽນແປງ */
 export function previousRange({ from, to }: DateRange): DateRange {
-  const days = eachDay({ from, to }).length;
+  const days = countDays({ from, to });
   return { from: addDays(from, -days), to: addDays(to, -days) };
 }
 
@@ -115,4 +122,28 @@ export function formatDateLao(value: Date | string): string {
 export function formatDayShort(value: string): string {
   const [, m, d] = value.split("-");
   return `${d}/${m}`;
+}
+
+/**
+ * ຕັດຊ່ວງວັນອອກເປັນທ່ອນລະ `size` ວັນ (ຕັ້ງຕົ້ນ 7 = 1 ອາທິດ).
+ * ໃຊ້ໃນການ sync ເພື່ອບໍ່ໃຫ້ຮ້ອງ API ເທື່ອດຽວຍາວເກີນຈົນ timeout.
+ */
+export function chunkRange({ from, to }: DateRange, size = 7): DateRange[] {
+  const out: DateRange[] = [];
+  let start = from;
+  // ກັນ loop ຍາວເກີນ ຖ້າຊ່ວງກວ້າງຜິດປົກກະຕິ (ຄືກັບ eachDay)
+  for (let i = 0; start <= to && i < 400; i++) {
+    const end = addDays(start, size - 1);
+    out.push({ from: start, to: end < to ? end : to });
+    start = addDays(start, size);
+  }
+  return out;
+}
+
+/** ຈຳນວນວັນໃນຊ່ວງ (ນັບທັງວັນຕົ້ນ ແລະ ວັນທ້າຍ) */
+export function countDays(range: DateRange): number {
+  const from = parseDate(range.from).getTime();
+  const to = parseDate(range.to).getTime();
+  if (from > to) throw new Error("ວັນທີ່ເລີ່ມຕ້ອງບໍ່ກາຍວັນທີ່ສິ້ນສຸດ");
+  return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
 }

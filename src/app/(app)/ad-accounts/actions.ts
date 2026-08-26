@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-server";
 import { num, reqStr, str } from "@/lib/form";
 import { enumVal } from "@/lib/form";
 import { EntityStatus } from "@/generated/prisma/enums";
@@ -22,18 +23,21 @@ function readForm(fd: FormData) {
 }
 
 export async function createAdAccount(fd: FormData) {
+  await requireSession();
   await prisma.adAccount.create({ data: readForm(fd) });
   revalidatePath("/ad-accounts");
   redirect("/ad-accounts");
 }
 
 export async function updateAdAccount(id: string, fd: FormData) {
+  await requireSession();
   await prisma.adAccount.update({ where: { id }, data: readForm(fd) });
   revalidatePath("/ad-accounts");
   redirect("/ad-accounts");
 }
 
 export async function deleteAdAccount(id: string) {
+  await requireSession();
   await prisma.adAccount.delete({ where: { id } });
   revalidatePath("/ad-accounts");
   redirect("/ad-accounts");

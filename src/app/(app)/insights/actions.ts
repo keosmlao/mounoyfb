@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-server";
 import { int0, num, num0, reqDate, reqStr, str } from "@/lib/form";
 import { toDateInput } from "@/lib/date";
 import { InsightLevel } from "@/generated/prisma/enums";
@@ -11,7 +12,7 @@ import { InsightLevel } from "@/generated/prisma/enums";
 function readMetrics(fd: FormData, suffix: string) {
   const g = (name: string) => `${name}_${suffix}`;
   return {
-    spend: num0(fd, g("spend")),
+    spend: Math.max(0, num0(fd, g("spend"))),
     impressions: int0(fd, g("impressions")),
     reach: int0(fd, g("reach")),
     clicks: int0(fd, g("clicks")),
@@ -19,7 +20,7 @@ function readMetrics(fd: FormData, suffix: string) {
     messages: int0(fd, g("messages")),
     leadsCount: int0(fd, g("leadsCount")),
     purchases: int0(fd, g("purchases")),
-    revenue: num0(fd, g("revenue")),
+    revenue: Math.max(0, num0(fd, g("revenue"))),
     videoViews: int0(fd, g("videoViews")),
   };
 }
@@ -33,8 +34,8 @@ function isAllZero(m: ReturnType<typeof readMetrics>) {
  * ແຖວທີ່ວ່າງທັງໝົດ ແລະ ຍັງບໍ່ເຄີຍມີຂໍ້ມູນ → ຂ້າມໄປ ບໍ່ສ້າງແຖວເປົ່າ.
  */
 export async function saveDailyInsights(fd: FormData) {
+  await requireSession();
   const date = reqDate(fd, "date", "ວັນທີ່");
-  const fxRateToLak = num(fd, "fxRateToLak") ?? 1;
   const campaignIds = fd.getAll("campaignId").map(String).filter(Boolean);
 
   const campaigns = await prisma.campaign.findMany({
@@ -42,12 +43,22 @@ export async function saveDailyInsights(fd: FormData) {
     select: { id: true, adAccountId: true, adAccount: { select: { currency: true } } },
   });
   const byId = new Map(campaigns.map((c) => [c.id, c]));
+  const ratesByCurrency = new Map<string, number>();
 
   for (const campaignId of campaignIds) {
     const campaign = byId.get(campaignId);
     if (!campaign) continue;
 
     const metrics = readMetrics(fd, campaignId);
+    const currency = campaign.adAccount.currency;
+    const fxRateToLak =
+      currency === "LAK"
+        ? 1
+        : (num(fd, `fxRateToLak_${currency}`) ?? num(fd, "fxRateToLak") ?? 0);
+    if (fxRateToLak <= 0) {
+      throw new Error(`ອັດຕາແລກປ່ຽນ ${currency} ເປັນກີບຕ້ອງຫຼາຍກວ່າ 0`);
+    }
+    ratesByCurrency.set(currency, fxRateToLak);
     const entityKey = `CAMPAIGN:${campaignId}`;
     const existing = await prisma.insight.findUnique({
       where: { date_entityKey: { date, entityKey } },
@@ -64,7 +75,7 @@ export async function saveDailyInsights(fd: FormData) {
       ...metrics,
       spendLak: Math.round(metrics.spend * fxRateToLak),
       fxRateToLak,
-      currency: campaign.adAccount.currency,
+      currency,
       adAccountId: campaign.adAccountId,
       campaignId,
       level: InsightLevel.CAMPAIGN,
@@ -78,16 +89,14 @@ export async function saveDailyInsights(fd: FormData) {
     });
   }
 
-  // ຈື່ອັດຕາແລກປ່ຽນຂອງວັນນັ້ນໄວ້ ເພື່ອເອົາມາເປັນຄ່າຕັ້ງຕົ້ນເທື່ອຕໍ່ໄປ
-  if (campaigns.length > 0) {
-    const currency = campaigns[0].adAccount.currency;
-    if (currency !== "LAK") {
-      await prisma.exchangeRate.upsert({
-        where: { date_currency: { date, currency } },
-        create: { date, currency, rateToLak: fxRateToLak },
-        update: { rateToLak: fxRateToLak },
-      });
-    }
+  // ຈື່ອັດຕາຂອງແຕ່ລະສະກຸນແຍກກັນ ເພື່ອບໍ່ເອົາ rate USD ໄປໃຊ້ກັບສະກຸນອື່ນ.
+  for (const [currency, rateToLak] of ratesByCurrency) {
+    if (currency === "LAK") continue;
+    await prisma.exchangeRate.upsert({
+      where: { date_currency: { date, currency } },
+      create: { date, currency, rateToLak },
+      update: { rateToLak },
+    });
   }
 
   revalidatePath("/insights");
@@ -97,10 +106,15 @@ export async function saveDailyInsights(fd: FormData) {
 
 /** ບັນທຶກ 1 ແຖວ ໃນລະດັບໃດກໍ່ໄດ້ (ບັນຊີ / ແຄມເປນ / ຊຸດ / ໂຄສະນາ) */
 export async function saveSingleInsight(fd: FormData) {
+  await requireSession();
   const date = reqDate(fd, "date", "ວັນທີ່");
-  const level = (str(fd, "level") ?? "CAMPAIGN") as InsightLevel;
+  const levelValue = str(fd, "level") ?? "CAMPAIGN";
+  if (!Object.values(InsightLevel).includes(levelValue as InsightLevel)) {
+    throw new Error("ລະດັບຂໍ້ມູນບໍ່ຖືກຕ້ອງ");
+  }
+  const level = levelValue as InsightLevel;
   const targetId = reqStr(fd, "targetId", "ເປົ້າໝາຍ");
-  const fxRateToLak = num(fd, "fxRateToLak") ?? 1;
+  let fxRateToLak = num(fd, "fxRateToLak") ?? 1;
   const metrics = readMetrics(fd, "row");
 
   let adAccountId = targetId;
@@ -159,6 +173,11 @@ export async function saveSingleInsight(fd: FormData) {
     currency = acc.currency;
   }
 
+  if (currency === "LAK") fxRateToLak = 1;
+  if (fxRateToLak <= 0) {
+    throw new Error(`ອັດຕາແລກປ່ຽນ ${currency} ເປັນກີບຕ້ອງຫຼາຍກວ່າ 0`);
+  }
+
   const entityKey = `${level}:${targetId}`;
   const data = {
     ...metrics,
@@ -186,6 +205,7 @@ export async function saveSingleInsight(fd: FormData) {
 }
 
 export async function deleteInsight(id: string) {
+  await requireSession();
   await prisma.insight.delete({ where: { id } });
   revalidatePath("/insights");
   revalidatePath("/");

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { logout } from "@/app/login/actions";
 
 type NavItem = { href: string; label: string; icon: string; badgeKey?: string };
 type NavGroup = { title: string; items: NavItem[] };
@@ -81,6 +82,18 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
           </ul>
         </div>
       ))}
+
+      <form action={logout} className="mt-1 border-t border-[var(--border)] pt-3">
+        <button
+          type="submit"
+          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+        >
+          <span aria-hidden className="w-4 text-center opacity-80">
+            ⏻
+          </span>
+          ອອກຈາກລະບົບ
+        </button>
+      </form>
     </nav>
   );
 

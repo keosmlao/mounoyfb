@@ -15,8 +15,8 @@ import {
   deleteAd,
   deleteAdSet,
   updateAdSet,
-} from "@/app/campaigns/actions";
-import { saveSingleInsight } from "@/app/insights/actions";
+} from "@/app/(app)/campaigns/actions";
+import { saveSingleInsight } from "@/app/(app)/insights/actions";
 import { CREATIVE_TYPES, STATUS_LABEL, STATUS_TONE, options } from "@/lib/labels";
 import { addDays, toDateInput, todayStr } from "@/lib/date";
 import { formatCompact, formatLak } from "@/lib/format";
