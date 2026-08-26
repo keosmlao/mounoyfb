@@ -21,7 +21,7 @@ import { totalsScope } from "@/lib/scope";
 import { AlertList } from "@/components/AlertList";
 import { buildAlerts, countActionable } from "@/lib/alerts";
 import { AdviceList } from "@/components/AdviceList";
-import { actionable, buildAdvice, summary, waiting } from "@/lib/advice";
+import { actionable, buildAdvice, waiting } from "@/lib/advice";
 import { loadMoney } from "@/lib/money-server";
 import { orderEconomics } from "@/lib/advice-rules";
 import { sumOrderTotals, type OrderFinancialRow } from "@/lib/orders";
@@ -122,7 +122,6 @@ export default async function DashboardPage({
   const advice = await buildAdvice(range);
   const topAdvice = actionable(advice).slice(0, 4);
   const blocked = waiting(advice).slice(0, 2);
-  const econSummary = summary(advice).slice(0, 1);
   const [activeCampaigns, newLeads] = counts;
 
   // ---- ຂໍ້ມູນລາຍວັນສຳລັບກຣາຟ
@@ -183,53 +182,6 @@ export default async function DashboardPage({
         }
       />
 
-      {econSummary.length > 0 ? (
-        <Card className="mb-5">
-          <CardHeader title="ສະຫຼຸບຮອບນີ້" />
-          <AdviceList advice={econSummary} />
-        </Card>
-      ) : null}
-
-      {topAdvice.length > 0 ? (
-        <Card className="mb-5">
-          <CardHeader
-            title="ຄວນເຮັດຫຍັງຕໍ່"
-            subtitle="ຄິດຈາກຜົນແຍກກຸ່ມຂອງຊ່ວງທີ່ເລືອກ"
-            action={
-              <Link href="/analysis" className="btn btn-sm">
-                ເບິ່ງການວິເຄາະ
-              </Link>
-            }
-          />
-          <AdviceList advice={topAdvice} />
-        </Card>
-      ) : null}
-
-      {blocked.length > 0 ? (
-        <Card className="mb-5">
-          <CardHeader
-            title="ຍັງຕັດສິນບໍ່ໄດ້"
-            subtitle="ຂາດຂໍ້ມູນຫຍັງ ແລະ ຕ້ອງເຮັດຫຍັງຈຶ່ງຕັດສິນໄດ້"
-          />
-          <AdviceList advice={blocked} />
-        </Card>
-      ) : null}
-
-      {alerts.length > 0 ? (
-        <Card className="mb-5">
-          <CardHeader
-            title="ຕ້ອງລົງມື"
-            subtitle={`${countActionable(alerts)} ເລື່ອງດ່ວນ ຈາກທັງໝົດ ${alerts.length} ການແຈ້ງເຕືອນ`}
-            action={
-              <Link href="/alerts" className="btn btn-sm">
-                ເບິ່ງທັງໝົດ
-              </Link>
-            }
-          />
-          <AlertList alerts={alerts.slice(0, 4)} />
-        </Card>
-      ) : null}
-
       <DateRangeBar basePath="/" range={range} activePreset={sp.preset} />
 
       {/* ຕົວເລກນຳ — ກຳໄລຈິງຈາກອໍເດີ ບໍ່ແມ່ນຈາກ pixel ຂອງ Facebook */}
@@ -280,6 +232,46 @@ export default async function DashboardPage({
           </div>
         </dl>
       </Card>
+
+      {topAdvice.length > 0 ? (
+        <Card className="mb-5">
+          <CardHeader
+            title="ຄວນເຮັດຫຍັງຕໍ່"
+            subtitle="ຄິດຈາກຜົນແຍກກຸ່ມຂອງຊ່ວງທີ່ເລືອກ"
+            action={
+              <Link href="/analysis" className="btn btn-sm">
+                ເບິ່ງການວິເຄາະ
+              </Link>
+            }
+          />
+          <AdviceList advice={topAdvice} />
+        </Card>
+      ) : null}
+
+      {alerts.length > 0 ? (
+        <Card className="mb-5">
+          <CardHeader
+            title="ຕ້ອງລົງມື"
+            subtitle={`${countActionable(alerts)} ເລື່ອງດ່ວນ ຈາກທັງໝົດ ${alerts.length} ການແຈ້ງເຕືອນ`}
+            action={
+              <Link href="/alerts" className="btn btn-sm">
+                ເບິ່ງທັງໝົດ
+              </Link>
+            }
+          />
+          <AlertList alerts={alerts.slice(0, 4)} />
+        </Card>
+      ) : null}
+
+      {blocked.length > 0 ? (
+        <Card className="mb-5">
+          <CardHeader
+            title="ຍັງຕັດສິນບໍ່ໄດ້"
+            subtitle="ຂາດຂໍ້ມູນຫຍັງ ແລະ ຕ້ອງເຮັດຫຍັງຈຶ່ງຕັດສິນໄດ້"
+          />
+          <AdviceList advice={blocked} />
+        </Card>
+      ) : null}
 
       {/* 5 ຕົວທີ່ໃຊ້ຕັດສິນໃຈຈິງ — ຕົວອື່ນຢູ່ໜ້າ ວິເຄາະ ແລະ ລາຍງານ */}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">

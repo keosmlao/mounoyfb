@@ -9,6 +9,11 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
  */
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+
+  // ກວດສະພາບລະບົບ — ເຄື່ອງມືເຝົ້າເບິ່ງບໍ່ມີ cookie ຈຶ່ງຕ້ອງເຂົ້າໄດ້ໂດຍບໍ່ login
+  // (route ນັ້ນບໍ່ສົ່ງຂໍ້ມູນທຸລະກິດອອກ ບອກແຕ່ວ່າຕໍ່ຖານຂໍ້ມູນໄດ້ບໍ່)
+  if (pathname === "/api/health") return NextResponse.next();
+
   const isLoginPage = pathname === "/login";
 
   const authenticated = await verifySessionToken(
