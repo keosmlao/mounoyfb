@@ -512,10 +512,17 @@ h1, h2, h3 {
   left: 0;
   width: var(--rail);
   z-index: 40;
-  display: flex;
+  /* ຕັ້ງ display ຢູ່ນີ້ເອງ — ໄຟລ໌ນີ້ຢູ່ນອກ @layer ຈຶ່ງຊະນະ utility
+     `hidden lg:flex` ຂອງ Tailwind ສະເໝີ ແລ້ວແຖບຈະຄ້າງສະແດງໃນມືຖື */
+  display: none;
   flex-direction: column;
   background: var(--surface-2);
   border-right: 1px solid var(--border);
+}
+@media (min-width: 1024px) {
+  .rail {
+    display: flex;
+  }
 }
 
 .rail-top {
@@ -684,6 +691,7 @@ h1, h2, h3 {
   top: 0;
   z-index: 30;
   display: flex;
+  /* ເຫດຜົນດຽວກັບ .rail — ຄຸມການເຊື່ອງ/ສະແດງຢູ່ນີ້ເອງ */
   align-items: center;
   gap: 0.5rem;
   min-height: 2.75rem;
@@ -691,6 +699,12 @@ h1, h2, h3 {
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .topbar {
+    display: none;
+  }
 }
 
 .brand-mark {
