@@ -27,11 +27,11 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="card-header flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
-      <div>
-        <h2 className="text-[0.95rem] font-semibold tracking-[-0.01em]">{title}</h2>
+    <div className="card-header flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+      <div className="min-w-0">
+        <h2 className="text-[0.925rem] font-semibold">{title}</h2>
         {subtitle ? (
-          <p className="mt-1 text-xs text-[var(--fg-muted)]">{subtitle}</p>
+          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{subtitle}</p>
         ) : null}
       </div>
       {action}

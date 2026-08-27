@@ -1,4 +1,4 @@
-import { Sidebar } from "@/components/Sidebar";
+import { TopNav } from "@/components/TopNav";
 import { buildAlerts, countActionable } from "@/lib/alerts";
 import { prisma } from "@/lib/prisma";
 
@@ -39,9 +39,9 @@ export default async function AppLayout({
   ]);
 
   return (
-    <div className="app-shell flex min-h-dvh flex-col lg:flex-row">
-      <Sidebar alertCount={alertCount} inboxCount={inboxCount} />
-      <main className="min-w-0 flex-1 px-3 pb-24 pt-4 sm:px-5 lg:px-6 lg:py-6 lg:pb-10">
+    <div className="app-shell flex min-h-dvh flex-col">
+      <TopNav alertCount={alertCount} inboxCount={inboxCount} />
+      <main className="min-w-0 flex-1 px-3 pb-24 pt-4 sm:px-5 lg:px-6 lg:pb-10 lg:pt-6">
         <div className="mx-auto w-full max-w-[1600px]">{children}</div>
       </main>
     </div>
