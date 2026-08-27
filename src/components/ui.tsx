@@ -49,17 +49,16 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="page-header mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p className="mb-1.5 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--brand)]">
-          FBMONOY · Operations
-        </p>
-        <h1 className="text-2xl font-bold tracking-[-0.035em] sm:text-[1.75rem]">{title}</h1>
+    <div className="page-header mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-xl font-bold tracking-[-0.03em] sm:text-2xl">{title}</h1>
         {description ? (
-          <p className="mt-1.5 max-w-3xl text-sm text-[var(--fg-muted)]">{description}</p>
+          <p className="mt-1 max-w-3xl text-sm text-[var(--fg-muted)]">{description}</p>
         ) : null}
       </div>
-      {action ? <div className="flex gap-2">{action}</div> : null}
+      {action ? (
+        <div className="flex flex-wrap items-center gap-2">{action}</div>
+      ) : null}
     </div>
   );
 }

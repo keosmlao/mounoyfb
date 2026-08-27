@@ -38,7 +38,7 @@ export function StatTile({
     <div className="card stat-tile group relative overflow-hidden p-4 sm:p-5">
       <span aria-hidden className="stat-accent absolute inset-x-0 top-0 h-[3px]" />
       <p className="text-[0.72rem] font-semibold uppercase tracking-[0.06em] text-[var(--fg-muted)]">{label}</p>
-      <p className="mt-2 text-[1.65rem] font-bold leading-none tracking-[-0.035em]">{value}</p>
+      <p className="mt-2 text-[1.8rem] font-bold leading-none tracking-[-0.035em]">{value}</p>
       <div className="mt-3 flex min-h-6 items-end justify-between gap-2">
         <div>
           {delta ? (

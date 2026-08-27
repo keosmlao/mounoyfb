@@ -42,6 +42,11 @@
   --chart-muted: #c4cad3;
   --chart-grid: #e6e9ee;
 
+  /* ຂະໜາດເປົ້າໝາຍການກົດ — ຄອມໃຊ້ເມົ້າ ຈຶ່ງແໜ້ນໄດ້ */
+  --tap: 2.45rem;
+  --tap-sm: 2.05rem;
+  --field-h: 2.6rem;
+
   --radius: 16px;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.04), 0 5px 18px rgb(15 23 42 / 0.035);
   --shadow-md: 0 14px 40px rgb(15 23 42 / 0.10);
@@ -115,6 +120,16 @@
   border-color: var(--border);
 }
 
+/* ເຄື່ອງທີ່ບໍ່ມີເມົ້າ (ໂທລະສັບ) — ຂະຫຍາຍທຸກເປົ້າໝາຍໃຫ້ຮອດ 44px
+   ຊຶ່ງເປັນຂະໜາດຕ່ຳສຸດທີ່ນິ້ວກົດຖືກໂດຍບໍ່ຕ້ອງເລັງ (WCAG 2.2) */
+@media (pointer: coarse) {
+  :root {
+    --tap: 2.75rem;
+    --tap-sm: 2.5rem;
+    --field-h: 2.9rem;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
@@ -123,6 +138,15 @@ body {
   /* ອັກສອນລາວມີສະຫຼະ ແລະ ວັນນະຍຸດຊ້ອນເທິງ-ລຸ່ມ —
      ຄວາມສູງແຖວມາດຕະຖານ 1.4 ຈະເຮັດໃຫ້ຕົວໜັງສືຕິດກັນຈົນອ່ານຍາກ */
   line-height: 1.65;
+  /* ຕັດການລໍ 300ms ຂອງເບຣົາເຊີມືຖື ແລະ ເງົາຕອນແຕະ */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ບໍ່ໃຫ້ການລາກໃນຕາຕະລາງໄປດຶງທັງໜ້າຕາມ */
+.table-wrap {
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .app-shell {
@@ -198,9 +222,9 @@ h1, h2, h3 {
     align-items: center;
     justify-content: center;
     gap: 0.4rem;
-    min-height: 2.45rem;
-    padding: 0.52rem 0.95rem;
-    border-radius: 10px;
+    min-height: var(--tap);
+    padding: 0.6rem 1.05rem;
+    border-radius: 12px;
     border: 1px solid var(--border-strong);
     background: var(--surface);
     color: var(--fg);
@@ -212,10 +236,17 @@ h1, h2, h3 {
     transition: background 0.14s ease, border-color 0.14s ease, opacity 0.14s ease, transform 0.14s ease, box-shadow 0.14s ease;
     white-space: nowrap;
   }
-  .btn:hover {
+  @media (hover: hover) {
+    .btn:hover {
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      transform: translateY(-1px);
+    }
+  }
+  /* ຈໍສຳຜັດຕ້ອງການ feedback ຕອນ "ກົດຄ້າງ" ແທນ hover */
+  .btn:active {
+    transform: scale(0.97);
     background: var(--surface-2);
-    border-color: var(--border-strong);
-    transform: translateY(-1px);
   }
   .btn:disabled {
     opacity: 0.55;
@@ -247,17 +278,17 @@ h1, h2, h3 {
     background: var(--danger-soft);
   }
   .btn-sm {
-    min-height: 2rem;
-    padding: 0.3rem 0.65rem;
+    min-height: var(--tap-sm);
+    padding: 0.4rem 0.85rem;
     font-size: 0.8125rem;
   }
 
   .field {
     display: block;
     width: 100%;
-    min-height: 2.55rem;
-    padding: 0.55rem 0.75rem;
-    border-radius: 10px;
+    min-height: var(--field-h);
+    padding: 0.65rem 0.85rem;
+    border-radius: 12px;
     border: 1px solid var(--border-strong);
     background: color-mix(in srgb, var(--surface) 94%, var(--brand) 6%);
     color: var(--fg);
@@ -337,7 +368,7 @@ h1, h2, h3 {
     font-weight: 600;
     font-size: 0.78125rem;
     color: var(--fg-muted);
-    padding: 0.72rem 0.85rem;
+    padding: 0.85rem 0.95rem;
     border-bottom: 1px solid var(--border);
     background: color-mix(in srgb, var(--surface-2) 92%, var(--brand) 8%);
     white-space: nowrap;
@@ -347,7 +378,8 @@ h1, h2, h3 {
     z-index: 1;
   }
   table.data td {
-    padding: 0.78rem 0.85rem;
+    /* ແຖວສູງພໍໃຫ້ນິ້ວແຕະຖືກແຖວທີ່ຕັ້ງໃຈ */
+    padding: 0.95rem;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
     line-height: 1.5;
@@ -363,6 +395,52 @@ h1, h2, h3 {
     font-variant-numeric: tabular-nums;
   }
 
+  /* ຕາຕະລາງກວ້າງກວ່າຈໍ (ເຊັ່ນ ແຄມເປນ 14 ຄໍລຳ) ຕ້ອງເລື່ອນຂວາງ —
+     ຄໍລຳຊື່ຄ້າງໄວ້ ບໍ່ດັ່ງນັ້ນເລື່ອນໄປແລ້ວບໍ່ຮູ້ວ່າແຖວໃດເປັນຂອງໃຜ */
+  table.data th:first-child,
+  table.data td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--surface);
+    box-shadow: 1px 0 0 var(--border);
+  }
+  table.data th:first-child {
+    z-index: 3;
+    background: color-mix(in srgb, var(--surface-2) 92%, var(--brand) 8%);
+  }
+  table.data tbody tr:hover td:first-child {
+    background: color-mix(in srgb, var(--brand-soft) 45%, var(--surface) 55%);
+  }
+
+  /* ແຖບເລືອກ (ແທັບ / ຕົວກັ່ນຕອງ) ຂະໜາດນິ້ວມື */
+  .seg {
+    display: inline-flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+  }
+  .seg-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: var(--tap-sm);
+    padding: 0.35rem 0.95rem;
+    border-radius: 11px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+  .seg-item-active {
+    background: var(--surface);
+    color: var(--brand);
+    box-shadow: 0 1px 4px rgb(15 23 42 / 0.12);
+  }
+
   .link {
     color: var(--brand);
     text-decoration: none;
@@ -376,6 +454,7 @@ h1, h2, h3 {
    App shell / navigation
    --------------------------------------------------------------- */
 .sidebar-shell {
+  transition: width 0.18s ease;
   color: var(--sidebar-fg);
   background:
     radial-gradient(circle at 15% -8%, rgb(59 130 246 / 0.23), transparent 18rem),
@@ -401,12 +480,33 @@ h1, h2, h3 {
   color: var(--sidebar-muted);
   transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
-.nav-link:hover {
-  color: var(--sidebar-fg);
-  background: rgb(255 255 255 / 0.055);
-  transform: translateX(2px);
+@media (hover: hover) {
+  .nav-link:hover {
+    color: var(--sidebar-fg);
+    background: rgb(255 255 255 / 0.055);
+  }
+}
+.nav-link:active {
+  background: rgb(255 255 255 / 0.1);
 }
 .nav-icon { background: rgb(255 255 255 / 0.055); color: #a8b5ca; }
+
+/* ປ້າຍນັບວຽກຄ້າງ — ຢູ່ຂ້າງຊື່ຕອນເມນູເຕັມ, ຢູ່ມຸມໄອຄອນຕອນເປັນແຖບ */
+.nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--sidebar);
+}
 .nav-link-active {
   color: #fff;
   background: linear-gradient(90deg, rgb(37 99 235 / 0.38), rgb(37 99 235 / 0.13));
@@ -423,6 +523,47 @@ h1, h2, h3 {
 .sidebar-quick-action:hover {
   transform: translateY(-1px);
   box-shadow: 0 13px 28px rgb(37 99 235 / 0.3);
+}
+
+/* ແຖບນຳທາງລຸ່ມຈໍ (ໂທລະສັບ) — ຕ້ອງລອຍເໜືອເນື້ອຫາ ແລະ ຫຼີກ gesture bar ຂອງ Android */
+.bottom-nav {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border-top: 1px solid var(--border);
+  backdrop-filter: blur(18px);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -6px 24px rgb(15 23 42 / 0.08);
+}
+.bottom-nav-item {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 3.5rem;
+  padding: 0.4rem 0.2rem;
+  color: var(--fg-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.bottom-nav-item:active {
+  background: var(--surface-2);
+}
+.bottom-nav-active {
+  color: var(--brand);
+}
+.bottom-nav-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 2.2rem;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: var(--brand);
+}
+.bottom-nav-item {
+  position: relative;
 }
 
 .mobile-topbar {
