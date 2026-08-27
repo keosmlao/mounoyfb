@@ -35,9 +35,9 @@ export function StatTile({
         : "text-[var(--danger)]";
 
   return (
-    <div className="card stat-tile group relative overflow-hidden p-4">
-      <p className="text-[0.78rem] font-medium text-[var(--fg-muted)]">{label}</p>
-      <p className="mt-1.5 text-[1.55rem] font-semibold leading-none tracking-[-0.03em]">{value}</p>
+    <div className="card stat-tile group relative overflow-hidden p-3.5">
+      <p className="text-[0.75rem] font-medium text-[var(--fg-muted)]">{label}</p>
+      <p className="mt-1.5 text-[1.4rem] font-semibold leading-none tracking-[-0.03em]">{value}</p>
       <div className="mt-2.5 flex min-h-5 items-end justify-between gap-2">
         <div>
           {delta ? (
