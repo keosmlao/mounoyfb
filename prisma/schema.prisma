@@ -127,10 +127,18 @@ model FbPage {
   category  String?
   status    EntityStatus @default(ACTIVE)
   note      String?
+  /// Page access token — ຕ້ອງມີຈຶ່ງອ່ານ/ຕອບ comment ແລະ ແຊັດຂອງເພຈນີ້ໄດ້
+  /// (token ຫຼັກຢູ່ AppSetting ໃຊ້ໄດ້ແຕ່ຝັ່ງໂຄສະນາ)
+  token     String?
+  /// ດຶງ comment/ແຊັດຂອງເພຈນີ້ນຳບໍ່ — ປິດໄວ້ໄດ້ສຳລັບເພຈທີ່ບໍ່ໄດ້ໃຊ້ແລ້ວ
+  inboxOn   Boolean      @default(true)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   campaigns Campaign[]
+  posts     FbPost[]
+  comments  FbComment[]
+  threads   FbThread[]
 }
 
 /// ສິນຄ້າ / ອອບເຟີ ທີ່ຍິງໂຄສະນາ — ໃຊ້ຄິດກຳໄລ ແລະ ROAS
@@ -185,6 +193,7 @@ model Campaign {
   segments  SegmentInsight[]
   leads     Lead[]
   orders    Order[]
+  posts     FbPost[]
 
   @@index([adAccountId])
   @@index([status])
@@ -361,11 +370,13 @@ model Lead {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  adSet    AdSet?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
-  ad       Ad?       @relation(fields: [adId], references: [id], onDelete: SetNull)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  campaign Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSet    AdSet?      @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  ad       Ad?         @relation(fields: [adId], references: [id], onDelete: SetNull)
+  product  Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
   orders   Order[]
+  comments FbComment[]
+  threads  FbThread[]
 
   @@index([date])
   @@index([status])
@@ -437,6 +448,115 @@ model ExchangeRate {
   @@index([currency, date])
 }
 
+// ---------------------------------------------------------------------------
+// ກ່ອງຂໍ້ຄວາມຂອງເພຈ: comment ແລະ ແຊັດ (Messenger)
+// ---------------------------------------------------------------------------
+
+/// ໂພສທີ່ມີ comment — ທັງໂພສທຳມະດາໃນເພຈ ແລະ ໂພສໂຄສະນາ (dark post)
+/// ໂພສໂຄສະນາບໍ່ຢູ່ໃນໜ້າເພຈ ຈຶ່ງຕ້ອງຫາຜ່ານ `effective_object_story_id` ຂອງ ad
+model FbPost {
+  id         String    @id @default(cuid())
+  fbPostId   String    @unique
+  pageId     String
+  /// ໂພສນີ້ຖືກໃຊ້ຍິງໂຄສະນາ (ບໍ່ໄດ້ໂພສລົງໜ້າເພຈ)
+  fromAd     Boolean   @default(false)
+  campaignId String?
+  message    String?
+  permalink  String?
+  postedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  page     FbPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  campaign Campaign?   @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  comments FbComment[]
+
+  @@index([pageId])
+  @@index([campaignId])
+  @@index([postedAt])
+}
+
+/// comment ດຽວ (ລວມທັງຄຳຕອບໃຕ້ comment) — `fromPage` ແຍກສຽງຂອງເຮົາເອງອອກ
+model FbComment {
+  id          String    @id @default(cuid())
+  fbCommentId String    @unique
+  postId      String
+  pageId      String
+  /// comment ແມ່ຂອງມັນ (ວ່າງ = comment ຊັ້ນເທິງສຸດ)
+  parentFbId  String?
+  fromId      String?
+  fromName    String?
+  message     String?
+  attachment  String?
+  likeCount   Int       @default(0)
+  /// ເພຈເປັນຄົນຂຽນເອງ (ຄຳຕອບຂອງເຮົາ) — ບໍ່ນັບເປັນວຽກຄ້າງ
+  fromPage    Boolean   @default(false)
+  hidden      Boolean   @default(false)
+  /// ຈັດການແລ້ວ (ຕອບແລ້ວ / ບໍ່ຕ້ອງຕອບ)
+  handled     Boolean   @default(false)
+  handledAt   DateTime?
+  assignee    String?
+  leadId      String?
+  commentedAt DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  post FbPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  page FbPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  lead Lead?  @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  @@index([pageId, commentedAt])
+  @@index([postId])
+  @@index([handled])
+}
+
+/// ຫ້ອງແຊັດ 1 ຄົນ (Messenger conversation)
+model FbThread {
+  id            String    @id @default(cuid())
+  fbThreadId    String    @unique
+  pageId        String
+  /// PSID ຂອງຄົນທັກ — ໃຊ້ສົ່ງຂໍ້ຄວາມກັບ
+  psid          String?
+  personName    String?
+  snippet       String?
+  messageCount  Int       @default(0)
+  unreadCount   Int       @default(0)
+  /// ຂໍ້ຄວາມສຸດທ້າຍມາຈາກລູກຄ້າ (ຍັງບໍ່ໄດ້ຕອບ)
+  waitingReply  Boolean   @default(false)
+  handled       Boolean   @default(false)
+  handledAt     DateTime?
+  assignee      String?
+  leadId        String?
+  lastMessageAt DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  page     FbPage      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  lead     Lead?       @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  messages FbMessage[]
+
+  @@index([pageId, lastMessageAt])
+  @@index([handled])
+}
+
+/// ຂໍ້ຄວາມໃນຫ້ອງແຊັດ — ເກັບໄວ້ອ່ານຍ້ອນຫຼັງ ແລະ ຮູ້ວ່າໃຜເວົ້າສຸດທ້າຍ
+model FbMessage {
+  id          String   @id @default(cuid())
+  fbMessageId String   @unique
+  threadId    String
+  fromPage    Boolean  @default(false)
+  fromId      String?
+  fromName    String?
+  text        String?
+  attachment  String?
+  sentAt      DateTime
+  createdAt   DateTime @default(now())
+
+  thread FbThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, sentAt])
+}
+
 /// ຕັ້ງຄ່າທົ່ວໄປ (key/value) — ເກັບ token, ຄ່າ default ຕ່າງໆ
 model AppSetting {
   key       String   @id
@@ -460,6 +580,8 @@ model SyncLog {
   /// ຈຳນວນວັນທັງໝົດທີ່ຕ້ອງດຶງ ແລະ ດຶງແລ້ວ — ໃຊ້ສະແດງແຖບຄວາມຄືບໜ້າ
   totalDays   Int        @default(0)
   doneDays    Int        @default(0)
+  /// ວຽກນີ້ຖືກເລີ່ມໂດຍຕົວຕັ້ງເວລາ (ບໍ່ແມ່ນຄົນກົດປຸ່ມ) — ໃຊ້ແຍກໃນປະຫວັດ
+  auto        Boolean    @default(false)
   message     String?
 
   @@index([startedAt])

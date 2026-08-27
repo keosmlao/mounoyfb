@@ -944,7 +944,11 @@ export async function activeSyncLog() {
  * ສ້າງແຖວ log ແລ້ວຄືນທັນທີ — ຍັງບໍ່ທັນດຶງຂໍ້ມູນ.
  * ຮັບປະກັນວ່າມີວຽກແລ່ນຢູ່ໄດ້ເທື່ອລະອັນ ເພື່ອບໍ່ໃຫ້ 2 ວຽກຂຽນທັບກັນ.
  */
-export async function startSyncLog(range: DateRange, levels: SyncLevels) {
+export async function startSyncLog(
+  range: DateRange,
+  levels: SyncLevels,
+  auto = false,
+) {
   const running = await activeSyncLog();
   if (running) {
     throw new Error("ມີການດຶງຂໍ້ມູນແລ່ນຢູ່ແລ້ວ — ລໍໃຫ້ຮອບນີ້ຈົບກ່ອນ");
@@ -956,6 +960,7 @@ export async function startSyncLog(range: DateRange, levels: SyncLevels) {
     return await prisma.syncLog.create({
       data: {
         status: "RUNNING",
+        auto,
         level: chosen.join(", ") || "campaign",
         dateFrom: parseDate(range.from),
         dateTo: parseDate(range.to),

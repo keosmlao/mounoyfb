@@ -65,6 +65,25 @@ export default async function EditFbPagePage({
                 ))}
               </select>
             </Field>
+            <Field
+              label="ກ່ອງຂໍ້ຄວາມ"
+              className="sm:col-span-2"
+              hint={
+                page.token
+                  ? "ເພຈນີ້ມີ page token ແລ້ວ — ດຶງ comment ແລະ ແຊັດໄດ້"
+                  : "ຍັງບໍ່ມີ page token — ກົດ “ເຊື່ອມເພຈກັບ Facebook” ຢູ່ໜ້າລາຍການເພຈ"
+              }
+            >
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="inboxOn"
+                  defaultChecked={page.inboxOn}
+                  className="h-4 w-4"
+                />
+                ຕິດຕາມ comment ແລະ ແຊັດ ຂອງເພຈນີ້
+              </label>
+            </Field>
             <Field label="ໝາຍເຫດ" className="sm:col-span-2">
               <textarea
                 name="note"

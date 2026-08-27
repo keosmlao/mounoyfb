@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
-import { enumVal, reqStr, str } from "@/lib/form";
+import { bool, enumVal, reqStr, str } from "@/lib/form";
 import { EntityStatus } from "@/generated/prisma/enums";
 
 const STATUSES = Object.values(EntityStatus);
@@ -16,6 +16,8 @@ function readForm(fd: FormData) {
     category: str(fd, "category"),
     status: enumVal(fd, "status", STATUSES, EntityStatus.ACTIVE),
     note: str(fd, "note"),
+    // ປິດໄວ້ໄດ້ສຳລັບເພຈທີ່ບໍ່ຢາກໃຫ້ດຶງ comment/ແຊັດ
+    inboxOn: bool(fd, "inboxOn"),
   };
 }
 

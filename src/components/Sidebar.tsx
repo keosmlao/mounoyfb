@@ -50,6 +50,13 @@ const NAV: NavGroup[] = [
         hint: "ດຶງຈາກ Excel / Google Sheets",
       },
       { href: "/leads", label: "ລູກຄ້າ", icon: "☺", hint: "ຄົນທີ່ທັກເຂົ້າມາ" },
+      {
+        href: "/inbox",
+        label: "ກ່ອງຂໍ້ຄວາມ",
+        icon: "✉",
+        badgeKey: "inbox",
+        hint: "comment ແລະ ແຊັດ ທີ່ຍັງບໍ່ໄດ້ຕອບ",
+      },
     ],
   },
   {
@@ -82,18 +89,24 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
+export function Sidebar({
+  alertCount = 0,
+  inboxCount = 0,
+}: {
+  alertCount?: number;
+  inboxCount?: number;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const nav = (
-    <nav className="flex flex-col gap-5 p-3">
+    <nav className="flex flex-col gap-6 px-3 py-4">
       {NAV.map((group) => (
         <div key={group.title}>
-          <p className="px-2 pb-1.5 text-[0.7rem] font-semibold uppercase tracking-wider text-[var(--fg-subtle)]">
+          <p className="nav-group-title px-3 pb-2 text-[0.65rem] font-bold uppercase tracking-[0.16em]">
             {group.title}
           </p>
-          <ul className="flex flex-col gap-0.5">
+          <ul className="flex flex-col gap-1">
             {group.items.map((item) => {
               const active = isActive(pathname, item.href);
               return (
@@ -102,19 +115,25 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
                     href={item.href}
                     title={item.hint}
                     onClick={() => setOpen(false)}
-                    className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+                    aria-current={active ? "page" : undefined}
+                    className={`nav-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ${
                       active
-                        ? "bg-[var(--brand-soft)] font-medium text-[var(--brand)]"
-                        : "text-[var(--fg-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+                        ? "nav-link-active font-semibold"
+                        : "font-medium"
                     }`}
                   >
-                    <span aria-hidden className="w-4 text-center opacity-80">
+                    <span aria-hidden className="nav-icon grid h-7 w-7 shrink-0 place-items-center rounded-lg text-[0.8rem]">
                       {item.icon}
                     </span>
                     {item.label}
                     {item.badgeKey === "alerts" && alertCount > 0 ? (
                       <span className="ml-auto rounded-full bg-[var(--danger-soft)] px-1.5 py-0.5 text-[0.7rem] font-semibold text-[var(--danger)]">
                         {alertCount}
+                      </span>
+                    ) : null}
+                    {item.badgeKey === "inbox" && inboxCount > 0 ? (
+                      <span className="ml-auto rounded-full bg-[var(--warning-soft)] px-1.5 py-0.5 text-[0.7rem] font-semibold text-[var(--warning)]">
+                        {inboxCount}
                       </span>
                     ) : null}
                   </Link>
@@ -125,12 +144,12 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
         </div>
       ))}
 
-      <form action={logout} className="mt-1 border-t border-[var(--border)] pt-3">
+      <form action={logout} className="sidebar-logout mt-1 border-t pt-3">
         <button
           type="submit"
-          className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--fg)]"
+          className="nav-link flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium"
         >
-          <span aria-hidden className="w-4 text-center opacity-80">
+          <span aria-hidden className="nav-icon grid h-7 w-7 place-items-center rounded-lg text-xs">
             ⏻
           </span>
           ອອກຈາກລະບົບ
@@ -142,7 +161,7 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
   return (
     <>
       {/* ແຖບເທິງ ສຳລັບຈໍນ້ອຍ */}
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 py-3 lg:hidden">
+      <div className="mobile-topbar sticky top-0 z-50 flex items-center justify-between border-b px-4 py-3 lg:hidden">
         <Brand />
         <button
           type="button"
@@ -155,15 +174,28 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
       </div>
 
       {open ? (
-        <div className="border-b border-[var(--border)] bg-[var(--surface)] lg:hidden">
-          {nav}
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            aria-label="ປິດເມນູ"
+            className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
+            onClick={() => setOpen(false)}
+          />
+          <div className="sidebar-shell absolute inset-y-0 left-0 w-[min(88vw,20rem)] overflow-y-auto pt-16 shadow-2xl">
+            {nav}
+          </div>
         </div>
       ) : null}
 
       {/* ແຖບຂ້າງ ສຳລັບຈໍໃຫຍ່ */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 overflow-y-auto border-r border-[var(--border)] bg-[var(--surface)] lg:block">
-        <div className="border-b border-[var(--border)] px-4 py-4">
+      <aside className="sidebar-shell sticky top-0 hidden h-dvh w-72 shrink-0 overflow-y-auto lg:block">
+        <div className="sidebar-brand border-b px-5 py-5">
           <Brand />
+        </div>
+        <div className="px-4 pt-4">
+          <Link href="/orders" className="sidebar-quick-action flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold">
+            <span className="text-lg leading-none">+</span> ເພີ່ມ Order
+          </Link>
         </div>
         {nav}
       </aside>
@@ -173,14 +205,14 @@ export function Sidebar({ alertCount = 0 }: { alertCount?: number }) {
 
 function Brand() {
   return (
-    <Link href="/" className="flex items-center gap-2.5">
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--brand)] text-sm font-bold text-[var(--brand-fg)]">
-        f
+    <Link href="/" className="flex items-center gap-3">
+      <span className="brand-mark grid h-10 w-10 place-items-center rounded-xl text-base font-black text-white shadow-lg">
+        F
       </span>
       <span className="leading-tight">
-        <span className="block text-sm font-semibold">FBMONOY</span>
-        <span className="block text-[0.7rem] text-[var(--fg-subtle)]">
-          ຈັດການໂຄສະນາ Facebook
+        <span className="brand-name block text-sm font-bold tracking-[0.06em]">FBMONOY</span>
+        <span className="brand-subtitle block text-[0.68rem]">
+          ADS OPERATIONS
         </span>
       </span>
     </Link>

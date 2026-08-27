@@ -43,4 +43,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ຄວາມຄືບໜ້າຢູ່ `SyncLog.doneDays/totalDays` — ວຽກທີ່ `updatedAt` ເກົ່າກວ່າ
   15 ນາທີຖືວ່າຕາຍ ແລະ ຖືກປິດອັດຕະໂນມັດໂດຍ `activeSyncLog()`;
   `runSyncJob()` heartbeat ອັບເດດຄ່ານີ້ທຸກ 1 ນາທີລະຫວ່າງວຽກຍາວ.
+- **ການດຶງອັດຕະໂນມັດແລ່ນໃນ process ດຽວກັບເວັບ** — `src/instrumentation.ts`
+  ເອີ້ນ `startAutoSyncScheduler()` ຕອນເຊີບເວີຂຶ້ນ ແລ້ວກວດທຸກໆ 1 ນາທີ
+  (`src/lib/auto-sync.ts`). ຄ່າຕັ້ງຢູ່ `AppSetting` (`autoSync*`) ແລະ
+  ໄລຍະຫ່າງນັບຈາກ `SyncLog.startedAt` ຫຼ້າສຸດ **ບໍ່ວ່າຄົນກົດ ຫຼື ອັດຕະໂນມັດ**.
+  ຖ້າຈະ deploy ຫຼາຍ instance ຕ້ອງຄິດເລື່ອງນີ້ຄືນ (ດຽວນີ້ກັນຊ້ອນດ້ວຍ
+  partial unique index ຂອງແຖວ RUNNING).
+- **ກ່ອງຂໍ້ຄວາມໃຊ້ token ຄົນລະໜ່ວຍກັບຝັ່ງໂຄສະນາ** — comment/ແຊັດ ຕ້ອງໃຊ້
+  *page token* ຂອງແຕ່ລະເພຈ (`FbPage.token`, ດຶງດ້ວຍ `syncPageTokens()`)
+  ບໍ່ແມ່ນ token ຫຼັກໃນ `AppSetting`. **ຫ້າມສົ່ງ `FbPage.token` ອອກໜ້າຈໍ**.
+  ໂພສໂຄສະນາ (dark post) ບໍ່ຢູ່ໃນ `/{page}/posts` — ຫາຜ່ານ
+  `creative{effective_object_story_id}` ຂອງ ad (`pullAdPosts` ໃນ `fb-inbox.ts`).
+- **`handled` / `leadId` ຂອງ comment ແລະ ແຊັດ ເປັນຂອງຄົນ** — ຮອບດຶງທັບໄດ້ແຕ່
+  ຂໍ້ມູນທີ່ມາຈາກ Facebook (ຂໍ້ຄວາມ, ຈຳນວນໄລຄ໌, ສະຖານະເຊື່ອງ) ຫ້າມທັບສະຖານະວຽກ.
 - **ຢ່າ deploy ອອກອິນເຕີເນັດແບບ http** — ຕັ້ງ `COOKIE_SECURE=1` ພ້ອມ HTTPS ກ່ອນ.

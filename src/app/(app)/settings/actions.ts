@@ -15,6 +15,15 @@ import {
   type FbAssetPage,
 } from "@/lib/fb";
 import { DEFAULT_THRESHOLDS, THRESHOLD_KEYS } from "@/lib/alerts";
+import {
+  AUTO_INBOX_INTERVALS,
+  AUTO_INBOX_KEYS,
+  AUTO_SYNC_DAY_CHOICES,
+  AUTO_SYNC_INTERVALS,
+  AUTO_SYNC_KEYS,
+  DEFAULT_AUTO_INBOX,
+  DEFAULT_AUTO_SYNC,
+} from "@/lib/auto-sync";
 
 async function put(key: string, value: string | null) {
   if (value === null) {
@@ -126,6 +135,61 @@ export async function saveExchangeRate(fd: FormData) {
   });
 
   revalidatePath("/settings");
+}
+
+/**
+ * ເປີດ/ປິດການດຶງອັດຕະໂນມັດ.
+ *
+ * ບໍ່ໄດ້ດຶງທັນທີ — ຕົວຕັ້ງເວລາຢູ່ `src/lib/auto-sync.ts` ຈະກວດພາຍໃນ 1 ນາທີ
+ * ແລ້ວດຶງເມື່ອຫ່າງຈາກການດຶງຄັ້ງລ່າສຸດຄົບຕາມໄລຍະທີ່ຕັ້ງໄວ້.
+ */
+export async function saveAutoSync(fd: FormData) {
+  await requireSession();
+
+  const everyMin = num(fd, "autoSyncEveryMin") ?? DEFAULT_AUTO_SYNC.everyMin;
+  const days = num(fd, "autoSyncDays") ?? DEFAULT_AUTO_SYNC.days;
+
+  await put(AUTO_SYNC_KEYS.enabled, bool(fd, "autoSyncEnabled") ? "1" : "0");
+  await put(
+    AUTO_SYNC_KEYS.everyMin,
+    String(
+      (AUTO_SYNC_INTERVALS as readonly number[]).includes(everyMin)
+        ? everyMin
+        : DEFAULT_AUTO_SYNC.everyMin,
+    ),
+  );
+  await put(
+    AUTO_SYNC_KEYS.days,
+    String(
+      (AUTO_SYNC_DAY_CHOICES as readonly number[]).includes(days)
+        ? days
+        : DEFAULT_AUTO_SYNC.days,
+    ),
+  );
+  await put(AUTO_SYNC_KEYS.segments, bool(fd, "autoSyncSegments") ? "1" : "0");
+
+  revalidatePath("/settings");
+}
+
+
+/** ເປີດ/ປິດການດຶງ comment ແລະ ແຊັດ ອັດຕະໂນມັດ */
+export async function saveAutoInbox(fd: FormData) {
+  await requireSession();
+
+  const everyMin = num(fd, "autoInboxEveryMin") ?? DEFAULT_AUTO_INBOX.everyMin;
+
+  await put(AUTO_INBOX_KEYS.enabled, bool(fd, "autoInboxEnabled") ? "1" : "0");
+  await put(
+    AUTO_INBOX_KEYS.everyMin,
+    String(
+      (AUTO_INBOX_INTERVALS as readonly number[]).includes(everyMin)
+        ? everyMin
+        : DEFAULT_AUTO_INBOX.everyMin,
+    ),
+  );
+
+  revalidatePath("/settings");
+  revalidatePath("/inbox");
 }
 
 /**

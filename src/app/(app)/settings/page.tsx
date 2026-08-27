@@ -4,6 +4,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import {
   runFacebookSync,
   saveAlertThresholds,
+  saveAutoInbox,
+  saveAutoSync,
   saveExchangeRate,
   saveSettings,
 } from "./actions";
@@ -11,11 +13,19 @@ import { getThresholds } from "@/lib/alerts";
 import { FbTokenGuide } from "@/components/FbTokenGuide";
 import { FbConnection } from "@/components/FbConnection";
 import { SyncProgress } from "@/components/SyncProgress";
-import { addDays, formatDateLao, todayStr } from "@/lib/date";
+import { addDays, formatDateLao, formatTimeLao, todayStr } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
 import { DISPLAY_CURRENCIES, DISPLAY_CURRENCY_LABEL } from "@/lib/money";
 import { activeSyncLog } from "@/lib/fb";
+import {
+  AUTO_INBOX_INTERVALS,
+  AUTO_SYNC_DAY_CHOICES,
+  AUTO_SYNC_INTERVALS,
+  autoSyncStatus,
+  inboxState,
+  intervalLabel,
+} from "@/lib/auto-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -35,13 +45,16 @@ export default async function SettingsPage() {
   // ກວດວຽກທີ່ຄ້າງກ່ອນ ຈຶ່ງອ່ານປະຫວັດ — ວຽກທີ່ຕາຍໄປແລ້ວຈະຖືກປິດເປັນ "ຜິດພາດ"
   const running = await activeSyncLog();
 
-  const [settings, rates, logs, accountsWithId, thresholds] = await Promise.all([
-    prisma.appSetting.findMany(),
-    prisma.exchangeRate.findMany({ orderBy: { date: "desc" }, take: 15 }),
-    prisma.syncLog.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
-    prisma.adAccount.count({ where: { fbAccountId: { not: null } } }),
-    getThresholds(),
-  ]);
+  const [settings, rates, logs, accountsWithId, thresholds, auto, inbox] =
+    await Promise.all([
+      prisma.appSetting.findMany(),
+      prisma.exchangeRate.findMany({ orderBy: { date: "desc" }, take: 15 }),
+      prisma.syncLog.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
+      prisma.adAccount.count({ where: { fbAccountId: { not: null } } }),
+      getThresholds(),
+      autoSyncStatus(),
+      inboxState(),
+    ]);
 
   const map = new Map(settings.map((s) => [s.key, s.value]));
   const hasToken = Boolean(map.get("fbAccessToken") || process.env.FB_ACCESS_TOKEN);
@@ -233,6 +246,135 @@ export default async function SettingsPage() {
                 ) : null}
               </div>
             </form>
+
+            <form
+              action={saveAutoSync}
+              className="grid gap-4 border-t border-[var(--border)] p-4 sm:grid-cols-2"
+            >
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    name="autoSyncEnabled"
+                    defaultChecked={auto.settings.enabled}
+                    className="h-4 w-4"
+                  />
+                  ດຶງເອງອັດຕະໂນມັດ (ບໍ່ຕ້ອງກົດປຸ່ມ)
+                </label>
+                <p className="mt-1.5 text-xs text-[var(--fg-subtle)]">
+                  ເຊີບເວີຈະດຶງໃຫ້ຕາມໄລຍະທີ່ຕັ້ງໄວ້ ຕາບໃດທີ່ບໍລິການຍັງເປີດຢູ່ —
+                  ດຶງສະເພາະລະດັບແຄມເປນ ແລ້ວທັບຂໍ້ມູນວັນເກົ່າຄືນ ເພາະ Facebook
+                  ຍັງແກ້ຕົວເລກຍ້ອນຫຼັງໄດ້ອີກຫຼາຍວັນ
+                </p>
+              </div>
+
+              <Field label="ດຶງເລື້ອຍປານໃດ">
+                <select
+                  name="autoSyncEveryMin"
+                  defaultValue={String(auto.settings.everyMin)}
+                  className="field"
+                >
+                  {AUTO_SYNC_INTERVALS.map((min) => (
+                    <option key={min} value={min}>
+                      {intervalLabel(min)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="ດຶງຍ້ອນຫຼັງ" hint="ນັບມື້ນີ້ນຳ">
+                <select
+                  name="autoSyncDays"
+                  defaultValue={String(auto.settings.days)}
+                  className="field"
+                >
+                  {AUTO_SYNC_DAY_CHOICES.map((days) => (
+                    <option key={days} value={days}>
+                      {days} ວັນຫຼ້າສຸດ
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input
+                  type="checkbox"
+                  name="autoSyncSegments"
+                  defaultChecked={auto.settings.segments}
+                  className="h-4 w-4"
+                />
+                ດຶງຜົນແຍກກຸ່ມນຳ (ໜ້າວິເຄາະ)
+              </label>
+
+              <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+                <SubmitButton>ບັນທຶກການດຶງອັດຕະໂນມັດ</SubmitButton>
+                {auto.settings.enabled ? (
+                  <p className="text-xs text-[var(--fg-muted)]">
+                    {auto.lastAt
+                      ? `ດຶງຫຼ້າສຸດ ${formatTimeLao(auto.lastAt)} · `
+                      : "ຍັງບໍ່ເຄີຍດຶງ · "}
+                    ຮອບຕໍ່ໄປ{" "}
+                    {auto.dueNow || !auto.nextAt
+                      ? "ພາຍໃນ 1 ນາທີ"
+                      : formatTimeLao(auto.nextAt)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-[var(--fg-subtle)]">ຕອນນີ້ປິດຢູ່</p>
+                )}
+              </div>
+            </form>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="ດຶງ comment ແລະ ແຊັດ"
+              subtitle="ກ່ອງຂໍ້ຄວາມຂອງເພຈ — ຕ້ອງເຊື່ອມ page token ຢູ່ໜ້າ ເພຈ ກ່ອນ"
+            />
+            <form action={saveAutoInbox} className="grid gap-4 p-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    name="autoInboxEnabled"
+                    defaultChecked={inbox.settings.enabled}
+                    className="h-4 w-4"
+                  />
+                  ດຶງ comment ແລະ ແຊັດ ອັດຕະໂນມັດ
+                </label>
+              </div>
+
+              <Field label="ດຶງເລື້ອຍປານໃດ">
+                <select
+                  name="autoInboxEveryMin"
+                  defaultValue={String(inbox.settings.everyMin)}
+                  className="field"
+                >
+                  {AUTO_INBOX_INTERVALS.map((min) => (
+                    <option key={min} value={min}>
+                      {intervalLabel(min)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <div className="flex items-end">
+                <SubmitButton>ບັນທຶກ</SubmitButton>
+              </div>
+
+              <p className="sm:col-span-2 text-xs text-[var(--fg-muted)]">
+                {inbox.syncedAt
+                  ? `ດຶງຫຼ້າສຸດ ${formatTimeLao(inbox.syncedAt)}${inbox.result ? ` — ${inbox.result}` : ""}`
+                  : "ຍັງບໍ່ເຄີຍດຶງກ່ອງຂໍ້ຄວາມ"}
+                {inbox.settings.enabled
+                  ? ` · ຮອບຕໍ່ໄປ ${inbox.dueNow || !inbox.nextAt ? "ພາຍໃນ 1 ນາທີ" : formatTimeLao(inbox.nextAt)}`
+                  : " · ຕອນນີ້ປິດຢູ່"}
+              </p>
+              {inbox.error ? (
+                <p className="sm:col-span-2 text-xs text-[var(--danger)]">
+                  ຮອບຫຼ້າສຸດມີບັນຫາ: {inbox.error}
+                </p>
+              ) : null}
+            </form>
           </Card>
 
           <Card>
@@ -260,9 +402,12 @@ export default async function SettingsPage() {
                           })}
                         </td>
                         <td>
-                          <Badge tone={SYNC_TONE[log.status] ?? "neutral"}>
-                            {SYNC_LABEL[log.status] ?? log.status}
-                          </Badge>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge tone={SYNC_TONE[log.status] ?? "neutral"}>
+                              {SYNC_LABEL[log.status] ?? log.status}
+                            </Badge>
+                            {log.auto ? <Badge>ອັດຕະໂນມັດ</Badge> : null}
+                          </div>
                         </td>
                         <td className="num">{formatInt(log.recordCount)}</td>
                         <td className="max-w-80 text-xs text-[var(--fg-muted)]">

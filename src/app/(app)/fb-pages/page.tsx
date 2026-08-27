@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createFbPage } from "./actions";
+import { linkPages } from "../inbox/actions";
 import { STATUS_LABEL, STATUS_TONE, options } from "@/lib/labels";
 import { formatInt } from "@/lib/format";
 
@@ -11,15 +12,31 @@ export const dynamic = "force-dynamic";
 export default async function FbPagesPage() {
   const pages = await prisma.fbPage.findMany({
     orderBy: { createdAt: "asc" },
-    include: { _count: { select: { campaigns: true } } },
+    include: {
+      _count: { select: { campaigns: true, comments: true, threads: true } },
+    },
   });
 
   return (
     <>
       <PageHeader
         title="ເພຈ Facebook"
-        description="ເພຈທີ່ໃຊ້ຍິງໂຄສະນາ — ໃຊ້ແຍກວ່າແຄມເປນໃດຍິງຈາກເພຈໃດ"
+        description="ເພຈທີ່ໃຊ້ຍິງໂຄສະນາ — ໃຊ້ແຍກວ່າແຄມເປນໃດຍິງຈາກເພຈໃດ ແລະ ຕິດຕາມ comment/ແຊັດ"
+        action={
+          <form action={linkPages}>
+            <SubmitButton pendingText="ກຳລັງເຊື່ອມ...">
+              ເຊື່ອມເພຈກັບ Facebook
+            </SubmitButton>
+          </form>
+        }
       />
+
+      <p className="mb-4 text-xs text-[var(--fg-subtle)]">
+        “ເຊື່ອມເພຈກັບ Facebook” ຈະດຶງລາຍການເພຈ ພ້ອມ page token ຂອງແຕ່ລະເພຈ —
+        ຕ້ອງມີແລ້ວຈຶ່ງອ່ານ/ຕອບ comment ແລະ ແຊັດໄດ້ (token ຫຼັກໃນໜ້າຕັ້ງຄ່າ
+        ໃຊ້ໄດ້ແຕ່ຝັ່ງໂຄສະນາ). ຕ້ອງການສິດ pages_read_engagement,
+        pages_read_user_content, pages_manage_engagement ແລະ pages_messaging.
+      </p>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
@@ -35,6 +52,7 @@ export default async function FbPagesPage() {
                     <th>Page ID</th>
                     <th>ໝວດ</th>
                     <th className="num">ແຄມເປນ</th>
+                    <th>ກ່ອງຂໍ້ຄວາມ</th>
                     <th>ສະຖານະ</th>
                     <th />
                   </tr>
@@ -48,6 +66,18 @@ export default async function FbPagesPage() {
                       </td>
                       <td>{p.category ?? "—"}</td>
                       <td className="num">{formatInt(p._count.campaigns)}</td>
+                      <td className="text-xs">
+                        {!p.token ? (
+                          <Badge tone="warning">ຍັງບໍ່ມີ token</Badge>
+                        ) : !p.inboxOn ? (
+                          <Badge>ປິດຕິດຕາມ</Badge>
+                        ) : (
+                          <span className="text-[var(--fg-muted)]">
+                            comment {formatInt(p._count.comments)} · ແຊັດ{" "}
+                            {formatInt(p._count.threads)}
+                          </span>
+                        )}
+                      </td>
                       <td>
                         <Badge tone={STATUS_TONE[p.status]}>
                           {STATUS_LABEL[p.status]}

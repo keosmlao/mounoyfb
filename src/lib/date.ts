@@ -147,3 +147,33 @@ export function countDays(range: DateRange): number {
   if (from > to) throw new Error("ວັນທີ່ເລີ່ມຕ້ອງບໍ່ກາຍວັນທີ່ສິ້ນສຸດ");
   return Math.floor((to - from) / (24 * 60 * 60 * 1000)) + 1;
 }
+
+/** Date → "27/08 14:05" (ເວລາລາວ) — ໃຊ້ບ່ອນທີ່ຕ້ອງຮູ້ຊົ່ວໂມງ ບໍ່ພຽງແຕ່ວັນ */
+export function formatTimeLao(value: Date): string {
+  return value
+    .toLocaleString("en-GB", {
+      timeZone: "Asia/Vientiane",
+      hour12: false,
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+    // en-GB ໃສ່ຈຸດຕໍ່ໄວ້ລະຫວ່າງວັນກັບເວລາ — ເອົາອອກໃຫ້ອ່ານສັ້ນລົງ
+    .replace(",", "");
+}
+
+/**
+ * "5 ນາທີກ່ອນ" / "3 ຊົ່ວໂມງກ່ອນ" — ອ່ານໄວກວ່າວັນທີ່ເຕັມ ໃນລາຍການທີ່ຕ້ອງຕອບໄວ.
+ * ເກີນ 7 ວັນຈຶ່ງຄືນເປັນວັນທີ່ ເພາະ "40 ວັນກ່ອນ" ບໍ່ໄດ້ຊ່ວຍຫຍັງ.
+ */
+export function formatAgo(value: Date, now: Date = new Date()): string {
+  const min = Math.floor((now.getTime() - value.getTime()) / 60_000);
+  if (min < 1) return "ຫາກໍ່ນີ້";
+  if (min < 60) return `${min} ນາທີກ່ອນ`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours} ຊົ່ວໂມງກ່ອນ`;
+  const days = Math.floor(hours / 24);
+  if (days <= 7) return `${days} ວັນກ່ອນ`;
+  return formatTimeLao(value);
+}

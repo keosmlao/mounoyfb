@@ -1,10 +1,24 @@
 import { Sidebar } from "@/components/Sidebar";
 import { buildAlerts, countActionable } from "@/lib/alerts";
+import { prisma } from "@/lib/prisma";
 
 /** ນັບການແຈ້ງເຕືອນໃສ່ເມນູ — ຖ້າຖານຂໍ້ມູນຍັງບໍ່ພ້ອມ ໃຫ້ສະແດງໜ້າໄດ້ຕາມປົກກະຕິ */
 async function alertBadgeCount(): Promise<number> {
   try {
     return countActionable(await buildAlerts());
+  } catch {
+    return 0;
+  }
+}
+
+/** ວຽກຄ້າງໃນກ່ອງຂໍ້ຄວາມ = comment ທີ່ຍັງບໍ່ຈັດການ + ຫ້ອງແຊັດທີ່ລໍຄຳຕອບ */
+async function inboxBadgeCount(): Promise<number> {
+  try {
+    const [comments, threads] = await Promise.all([
+      prisma.fbComment.count({ where: { handled: false, fromPage: false } }),
+      prisma.fbThread.count({ where: { waitingReply: true, handled: false } }),
+    ]);
+    return comments + threads;
   } catch {
     return 0;
   }
@@ -19,13 +33,16 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const alertCount = await alertBadgeCount();
+  const [alertCount, inboxCount] = await Promise.all([
+    alertBadgeCount(),
+    inboxBadgeCount(),
+  ]);
 
   return (
-    <div className="flex min-h-dvh flex-col lg:flex-row">
-      <Sidebar alertCount={alertCount} />
-      <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8">
-        {children}
+    <div className="app-shell flex min-h-dvh flex-col lg:flex-row">
+      <Sidebar alertCount={alertCount} inboxCount={inboxCount} />
+      <main className="min-w-0 flex-1 px-4 pb-10 pt-5 sm:px-6 lg:px-8 lg:py-8">
+        <div className="mx-auto w-full max-w-[1600px]">{children}</div>
       </main>
     </div>
   );
