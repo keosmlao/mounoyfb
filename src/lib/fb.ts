@@ -128,11 +128,55 @@ async function graphWrite(
   });
   const json = (await res.json()) as {
     success?: boolean;
-    error?: { message: string; code: number };
+    error?: {
+      message: string;
+      code: number;
+      error_subcode?: number;
+      error_user_msg?: string;
+    };
   };
   if (json.error) {
-    throw new Error(`Facebook API: ${json.error.message} (code ${json.error.code})`);
+    // error_user_msg ມັກບອກເຫດຜົນທີ່ເຂົ້າໃຈງ່າຍກວ່າ message ດິບ
+    const detail = json.error.error_user_msg ?? json.error.message;
+    throw new Error(`Facebook API: ${detail} (code ${json.error.code})`);
   }
+}
+
+/**
+ * ແປງຂໍ້ຜິດພາດຂອງ Facebook ໃຫ້ບອກ **ວິທີແກ້** ບໍ່ແມ່ນແຕ່ລະຫັດ error.
+ * ໃຊ້ຮ່ວມກັນທັງຝັ່ງໂຄສະນາ ແລະ ຝັ່ງກ່ອງຂໍ້ຄວາມ.
+ */
+export function explainFbError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("pages_read_user_content")) {
+    return (
+      "token ຂາດສິດ pages_read_user_content (ອ່ານໂພສ/comment ຂອງເພຈ) — " +
+      "ສ້າງ token ໃໝ່ໃຫ້ມີສິດນີ້ ແລ້ວໃສ່ຄືນຢູ່ໜ້າຕັ້ງຄ່າ ແລະ ກົດ “ເຊື່ອມເພຈກັບ Facebook” ອີກເທື່ອ"
+    );
+  }
+  if (message.includes("pages_manage_engagement")) {
+    return "token ຂາດສິດ pages_manage_engagement — ຕອບ/ເຊື່ອງ comment ບໍ່ໄດ້";
+  }
+  if (message.includes("pages_messaging")) {
+    return "token ຂາດສິດ pages_messaging — ອ່ານ/ຕອບແຊັດບໍ່ໄດ້";
+  }
+  if (message.includes("ads_management") || message.includes("code 200")) {
+    return "token ຂາດສິດ ads_management — ສັ່ງຢຸດ/ຍິງຕໍ່ ຈາກລະບົບນີ້ບໍ່ໄດ້";
+  }
+  if (message.includes("code 190")) {
+    return "token ໝົດອາຍຸ ຫຼື ຖືກຍົກເລີກ — ສ້າງໃໝ່ແລ້ວໃສ່ຢູ່ໜ້າຕັ້ງຄ່າ";
+  }
+  if (message.includes("code 100")) {
+    return (
+      "Facebook ບໍ່ຮັບຄຳສັ່ງນີ້ (code 100) — ສ່ວນຫຼາຍແມ່ນສິ່ງນີ້ຖືກລຶບ ຫຼື " +
+      "ເກັບເຂົ້າຄັງຢູ່ Facebook ແລ້ວ. ກົດ “ດຶງຂໍ້ມູນ” ຢູ່ໜ້າຕັ້ງຄ່າ ເພື່ອອັບເດດລາຍການ"
+    );
+  }
+  if (message.includes("code 4") || message.includes("code 17")) {
+    return "ຮ້ອງ API ຖີ່ເກີນ (rate limit) — ລໍສັກໜ້ອຍແລ້ວລອງໃໝ່";
+  }
+  return message;
 }
 
 /** ສະຖານະທີ່ສັ່ງກັບໄປ Facebook ໄດ້ — ອັນອື່ນເປັນສະຖານະພາຍໃນລະບົບເຮົາເອງ */
@@ -552,6 +596,20 @@ async function syncAccountStructure(
     });
     result.campaigns++;
   }
+
+  // ແຄມເປນທີ່ເຄີຍມີ ແຕ່ Facebook ບໍ່ຄືນມາອີກ = ຖືກລຶບ/ເກັບເຂົ້າຄັງຢູ່ Facebook
+  // (edge `/campaigns` ບໍ່ຄືນອັນທີ່ archived ຫຼື deleted).
+  // **ຫ້າມລຶບອອກ** ເພາະ Insight ຈະຖືກລຶບຕາມ ແລ້ວຄ່າໂຄສະນາໃນອະດີດຈະຫາຍໄປ —
+  // ໝາຍເປັນ "ເກັບເຂົ້າຄັງ" ແທນ ຈຶ່ງບໍ່ຄ້າງຢູ່ໃນລາຍການທີ່ກຳລັງຍິງ.
+  const liveIds = fbCampaigns.map((c) => c.id);
+  await prisma.campaign.updateMany({
+    where: {
+      adAccountId: account.id,
+      fbCampaignId: { not: null, notIn: liveIds },
+      status: { in: ["ACTIVE", "PAUSED", "DRAFT"] },
+    },
+    data: { status: "ARCHIVED" },
+  });
 
   const campaignByFbId = new Map(
     (

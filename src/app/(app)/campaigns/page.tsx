@@ -2,8 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { DateRangeBar } from "@/components/DateRangeBar";
-import { SubmitButton } from "@/components/SubmitButton";
-import { toggleCampaignStatus } from "./actions";
+import { RunToggle } from "@/components/RunToggle";
+import { toggleCampaignStatusSafe } from "./actions";
 import { parseDate, resolveRange } from "@/lib/date";
 import { derive, EMPTY_TOTALS, type Totals } from "@/lib/metrics";
 import { formatCompact, formatPercent } from "@/lib/format";
@@ -230,7 +230,7 @@ export default async function CampaignsPage({
                   // ຢຸດ/ຍິງຕໍ່ ໄດ້ສະເພາະ 2 ສະຖານະນີ້ — ອັນອື່ນ (ຮ່າງ/ຈົບ/ຄັງ) ບໍ່ມີຄວາມໝາຍ
                   const runnable =
                     c.status === "ACTIVE" || c.status === "PAUSED";
-                  const toggle = toggleCampaignStatus.bind(
+                  const toggle = toggleCampaignStatusSafe.bind(
                     null,
                     c.id,
                     c.status === "ACTIVE" ? "PAUSED" : "ACTIVE",
@@ -285,14 +285,10 @@ export default async function CampaignsPage({
                       </td>
                       <td className="num">
                         {runnable ? (
-                          <form action={toggle}>
-                            <SubmitButton
-                              className="btn btn-sm"
-                              pendingText="..."
-                            >
-                              {c.status === "ACTIVE" ? "ຢຸດ" : "ຍິງຕໍ່"}
-                            </SubmitButton>
-                          </form>
+                          <RunToggle
+                            action={toggle}
+                            label={c.status === "ACTIVE" ? "ຢຸດ" : "ຍິງຕໍ່"}
+                          />
                         ) : null}
                       </td>
                     </tr>

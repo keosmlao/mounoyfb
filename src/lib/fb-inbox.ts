@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { getFbConfig } from "./fb";
+import { explainFbError, getFbConfig } from "./fb";
 
 /**
  * ກ່ອງຂໍ້ຄວາມຂອງເພຈ — comment ແລະ ແຊັດ (Messenger).
@@ -549,34 +549,6 @@ export async function refreshThreadState(threadId: string): Promise<void> {
 
 // ------------------------------------------------------------------ ດຶງທັງໝົດ
 
-/**
- * ແປງຂໍ້ຜິດພາດຂອງ Facebook ໃຫ້ບອກ **ວິທີແກ້** ບໍ່ແມ່ນແຕ່ລະຫັດ error.
- * ລະຫັດທີ່ພົບເລື້ອຍທີ່ສຸດຄື 10 / 200 = token ຂາດສິດ.
- */
-function explain(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (message.includes("pages_read_user_content")) {
-    return (
-      "token ຂາດສິດ pages_read_user_content (ອ່ານໂພສ/comment ຂອງເພຈ) — " +
-      "ໄປສ້າງ token ໃໝ່ໃຫ້ມີສິດນີ້ ແລ້ວໃສ່ຄືນຢູ່ໜ້າຕັ້ງຄ່າ ແລະ ກົດ “ເຊື່ອມເພຈກັບ Facebook” ອີກເທື່ອ"
-    );
-  }
-  if (message.includes("pages_manage_engagement")) {
-    return "token ຂາດສິດ pages_manage_engagement — ຕອບ/ເຊື່ອງ comment ບໍ່ໄດ້";
-  }
-  if (message.includes("pages_messaging")) {
-    return "token ຂາດສິດ pages_messaging — ອ່ານ/ຕອບແຊັດບໍ່ໄດ້";
-  }
-  if (message.includes("code 190")) {
-    return "token ໝົດອາຍຸ ຫຼື ຖືກຍົກເລີກ — ສ້າງໃໝ່ແລ້ວໃສ່ຢູ່ໜ້າຕັ້ງຄ່າ";
-  }
-  if (message.includes("code 4") || message.includes("code 17")) {
-    return "ຮ້ອງ API ຖີ່ເກີນ (rate limit) — ລໍສັກໜ້ອຍແລ້ວດຶງໃໝ່";
-  }
-  return message;
-}
-
 export type InboxSyncResult = {
   posts: number;
   comments: number;
@@ -607,7 +579,7 @@ export async function syncInbox(): Promise<InboxSyncResult> {
   try {
     await pullAdPosts(config.apiVersion, config.accessToken);
   } catch (error) {
-    failures.push({ label: "ໂພສໂຄສະນາ", message: explain(error) });
+    failures.push({ label: "ໂພສໂຄສະນາ", message: explainFbError(error) });
   }
 
   const pages = await prisma.fbPage.findMany({
@@ -633,7 +605,7 @@ export async function syncInbox(): Promise<InboxSyncResult> {
         result.comments += await pullComments(config.apiVersion, page, post);
       }
     } catch (error) {
-      failures.push({ label: `${page.name} (comment)`, message: explain(error) });
+      failures.push({ label: `${page.name} (comment)`, message: explainFbError(error) });
     }
 
     try {
@@ -641,7 +613,7 @@ export async function syncInbox(): Promise<InboxSyncResult> {
       result.threads += chat.threads;
       result.messages += chat.messages;
     } catch (error) {
-      failures.push({ label: `${page.name} (ແຊັດ)`, message: explain(error) });
+      failures.push({ label: `${page.name} (ແຊັດ)`, message: explainFbError(error) });
     }
   }
 

@@ -13,7 +13,8 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { StatTile } from "@/components/StatTile";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DateRangeBar } from "@/components/DateRangeBar";
-import { createAdSet, toggleCampaignStatus } from "../actions";
+import { createAdSet, toggleCampaignStatusSafe } from "../actions";
+import { RunToggle } from "@/components/RunToggle";
 import {
   eachDay,
   formatDateLao,
@@ -162,17 +163,14 @@ export default async function CampaignDetailPage({
               ວິເຄາະ
             </Link>
             {campaign.status === "ACTIVE" || campaign.status === "PAUSED" ? (
-              <form
-                action={toggleCampaignStatus.bind(
+              <RunToggle
+                action={toggleCampaignStatusSafe.bind(
                   null,
                   id,
                   campaign.status === "ACTIVE" ? "PAUSED" : "ACTIVE",
                 )}
-              >
-                <SubmitButton className="btn" pendingText="ກຳລັງສັ່ງ...">
-                  {campaign.status === "ACTIVE" ? "⏸ ຢຸດແຄມເປນ" : "▶ ຍິງຕໍ່"}
-                </SubmitButton>
-              </form>
+                label={campaign.status === "ACTIVE" ? "⏸ ຢຸດແຄມເປນ" : "▶ ຍິງຕໍ່"}
+              />
             ) : null}
             <Link href={`/campaigns/${id}/edit`} className="btn btn-primary">
               ແກ້ໄຂ

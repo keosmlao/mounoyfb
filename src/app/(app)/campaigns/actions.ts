@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
 import { date, enumVal, num, reqStr, str } from "@/lib/form";
 import { CampaignObjective, EntityStatus } from "@/generated/prisma/enums";
-import { getFbConfig, setFbRunStatus } from "@/lib/fb";
+import { explainFbError, getFbConfig, setFbRunStatus } from "@/lib/fb";
 
 const STATUSES = Object.values(EntityStatus);
 const OBJECTIVES = Object.values(CampaignObjective);
@@ -89,6 +89,24 @@ export async function toggleCampaignStatus(id: string, next: EntityStatus) {
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
   revalidatePath("/");
+}
+
+/**
+ * ໃຊ້ກັບປຸ່ມ `RunToggle` — ຄືນ **ຂໍ້ຄວາມຜິດພາດ** ແທນທີ່ຈະ throw
+ * ເພື່ອໃຫ້ໜ້າຈໍສະແດງສາເຫດໄດ້ ໂດຍບໍ່ພັງທັງໜ້າ.
+ */
+export async function toggleCampaignStatusSafe(
+  id: string,
+  next: EntityStatus,
+  _prev: string | null,
+  _fd: FormData,
+): Promise<string | null> {
+  try {
+    await toggleCampaignStatus(id, next);
+    return null;
+  } catch (error) {
+    return explainFbError(error);
+  }
 }
 
 // ------------------------------------------------------------------ AdSet

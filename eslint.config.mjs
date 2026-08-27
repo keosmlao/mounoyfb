@@ -5,6 +5,16 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      // ບາງ signature ຖືກກຳນົດໂດຍ React/Next (ເຊັ່ນ action ຂອງ useActionState
+      // ຮັບ prevState + FormData) — ຕັ້ງຊື່ຂຶ້ນຕົ້ນດ້ວຍ _ ເພື່ອບອກວ່າຕັ້ງໃຈບໍ່ໃຊ້
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
