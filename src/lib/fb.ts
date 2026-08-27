@@ -3,6 +3,24 @@ import { chunkRange, countDays, parseDate, type DateRange } from "./date";
 import { InsightLevel, SegmentKind, type EntityStatus } from "@/generated/prisma/enums";
 import { SEGMENT_DEFS, buildSegKey } from "./segments";
 import { fromMinorUnits, toMinorUnits } from "./money";
+import {
+  actionValue,
+  budgetFromMinor,
+  dateOnly,
+  explainFbError,
+  LEAD_ACTIONS,
+  mapAccountStatus,
+  mapObjective,
+  mapStatus,
+  MESSAGE_ACTIONS,
+  PURCHASE_ACTIONS,
+  summarizeTargeting,
+  VIDEO_ACTIONS,
+  type FbAction,
+} from "./fb-map";
+
+// ຜູ້ໃຊ້ເກົ່າ import ຈາກໄຟລ໌ນີ້ — ສົ່ງຕໍ່ໃຫ້ ບໍ່ຕ້ອງແກ້ທຸກບ່ອນ
+export { explainFbError } from "./fb-map";
 import { UNKNOWN_TOKEN, type TokenState } from "./sync-health";
 
 /**
@@ -193,43 +211,6 @@ async function graphWrite(
   );
   // error_user_msg ມັກບອກເຫດຜົນທີ່ເຂົ້າໃຈງ່າຍກວ່າ message ດິບ
   if (json.error) throw graphErrorOf(json.error);
-}
-
-/**
- * ແປງຂໍ້ຜິດພາດຂອງ Facebook ໃຫ້ບອກ **ວິທີແກ້** ບໍ່ແມ່ນແຕ່ລະຫັດ error.
- * ໃຊ້ຮ່ວມກັນທັງຝັ່ງໂຄສະນາ ແລະ ຝັ່ງກ່ອງຂໍ້ຄວາມ.
- */
-export function explainFbError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (message.includes("pages_read_user_content")) {
-    return (
-      "token ຂາດສິດ pages_read_user_content (ອ່ານໂພສ/comment ຂອງເພຈ) — " +
-      "ສ້າງ token ໃໝ່ໃຫ້ມີສິດນີ້ ແລ້ວໃສ່ຄືນຢູ່ໜ້າຕັ້ງຄ່າ ແລະ ກົດ “ເຊື່ອມເພຈກັບ Facebook” ອີກເທື່ອ"
-    );
-  }
-  if (message.includes("pages_manage_engagement")) {
-    return "token ຂາດສິດ pages_manage_engagement — ຕອບ/ເຊື່ອງ comment ບໍ່ໄດ້";
-  }
-  if (message.includes("pages_messaging")) {
-    return "token ຂາດສິດ pages_messaging — ອ່ານ/ຕອບແຊັດບໍ່ໄດ້";
-  }
-  if (message.includes("ads_management") || message.includes("code 200")) {
-    return "token ຂາດສິດ ads_management — ສັ່ງຢຸດ/ຍິງຕໍ່ ຈາກລະບົບນີ້ບໍ່ໄດ້";
-  }
-  if (message.includes("code 190")) {
-    return "token ໝົດອາຍຸ ຫຼື ຖືກຍົກເລີກ — ສ້າງໃໝ່ແລ້ວໃສ່ຢູ່ໜ້າຕັ້ງຄ່າ";
-  }
-  if (message.includes("code 100")) {
-    return (
-      "Facebook ບໍ່ຮັບຄຳສັ່ງນີ້ (code 100) — ສ່ວນຫຼາຍແມ່ນສິ່ງນີ້ຖືກລຶບ ຫຼື " +
-      "ເກັບເຂົ້າຄັງຢູ່ Facebook ແລ້ວ. ກົດ “ດຶງຂໍ້ມູນ” ຢູ່ໜ້າຕັ້ງຄ່າ ເພື່ອອັບເດດລາຍການ"
-    );
-  }
-  if (message.includes("code 4") || message.includes("code 17")) {
-    return "ຮ້ອງ API ຖີ່ເກີນ (rate limit) — ລໍສັກໜ້ອຍແລ້ວລອງໃໝ່";
-  }
-  return message;
 }
 
 /**
@@ -448,19 +429,6 @@ export type FbAssets = {
   /** ດຶງເພຈບໍ່ໄດ້ກໍ່ບໍ່ເປັນຫຍັງ — ບອກເຫດຜົນໄວ້ໃຫ້ຮູ້ */
   pagesError?: string;
 };
-
-/** ລະຫັດສະຖານະບັນຊີຂອງ Facebook → ສະຖານະໃນລະບົບເຮົາ */
-function mapAccountStatus(code?: number) {
-  switch (code) {
-    case 1:
-      return "ACTIVE" as const;
-    case 100:
-    case 101:
-      return "ARCHIVED" as const;
-    default:
-      return "PAUSED" as const;
-  }
-}
 
 /**
  * ທົດສອບວ່າ token ໃຊ້ໄດ້ບໍ່ ແລະ ດຶງລາຍການບັນຊີໂຄສະນາ/ເພຈ ທີ່ token ນີ້ເຂົ້າເຖິງໄດ້.
@@ -689,8 +657,6 @@ type FbAd = {
   };
 };
 
-type FbAction = { action_type: string; value: string };
-
 type FbInsight = {
   date_start: string;
   campaign_id?: string;
@@ -706,64 +672,6 @@ type FbInsight = {
 };
 
 // ------------------------------------------------------------------ mapping
-
-/** ແປງ objective ຂອງ Facebook ມາເປັນຄ່າໃນລະບົບເຮົາ */
-function mapObjective(value?: string) {
-  const v = (value ?? "").toUpperCase();
-  if (v.includes("MESSAG")) return "MESSAGES" as const;
-  if (v.includes("LEAD")) return "LEADS" as const;
-  if (v.includes("SALES") || v.includes("CONVERSION")) return "SALES" as const;
-  if (v.includes("TRAFFIC") || v.includes("LINK_CLICKS")) return "TRAFFIC" as const;
-  if (v.includes("VIDEO")) return "VIDEO_VIEWS" as const;
-  if (v.includes("AWARENESS") || v.includes("REACH")) return "AWARENESS" as const;
-  if (v.includes("APP")) return "APP_PROMOTION" as const;
-  return "ENGAGEMENT" as const;
-}
-
-function mapStatus(value?: string) {
-  switch ((value ?? "").toUpperCase()) {
-    case "ACTIVE":
-      return "ACTIVE" as const;
-    case "PAUSED":
-      return "PAUSED" as const;
-    case "ARCHIVED":
-    case "DELETED":
-      return "ARCHIVED" as const;
-    default:
-      return "DRAFT" as const;
-  }
-}
-
-/** ງົບຈາກ API ມາເປັນຫົວໜ່ວຍນ້ອຍສຸດ (ເຊັນ) ຈຶ່ງຫານ 100 */
-function money(value?: string): number | null {
-  return value ? Number(value) / 100 : null;
-}
-
-/** "2026-07-26T10:00:00+0700" → Date ຂອງວັນນັ້ນ (UTC midnight) ສຳລັບຄໍລຳ @db.Date */
-function dateOnly(value?: string): Date | null {
-  return value ? parseDate(value.slice(0, 10)) : null;
-}
-
-function actionValue(actions: FbAction[] | undefined, types: string[]): number {
-  if (!actions) return 0;
-  let sum = 0;
-  for (const a of actions) {
-    if (types.includes(a.action_type)) sum += Number(a.value) || 0;
-  }
-  return sum;
-}
-
-const MESSAGE_ACTIONS = [
-  "onsite_conversion.messaging_conversation_started_7d",
-  "onsite_conversion.total_messaging_connection",
-];
-const LEAD_ACTIONS = ["lead", "onsite_conversion.lead_grouped"];
-const PURCHASE_ACTIONS = [
-  "purchase",
-  "omni_purchase",
-  "offsite_conversion.fb_pixel_purchase",
-];
-const VIDEO_ACTIONS = ["video_view", "watch_video_view"];
 
 // --------------------------------------------------------------------- sync
 
@@ -800,8 +708,8 @@ async function syncAccountStructure(
       name: c.name,
       objective: mapObjective(c.objective),
       status: mapStatus(c.status),
-      dailyBudget: money(c.daily_budget),
-      lifetimeBudget: money(c.lifetime_budget),
+      dailyBudget: budgetFromMinor(c.daily_budget, account.currency),
+      lifetimeBudget: budgetFromMinor(c.lifetime_budget, account.currency),
       startDate: dateOnly(c.start_time),
       endDate: dateOnly(c.stop_time),
     };
@@ -850,9 +758,9 @@ async function syncAccountStructure(
       const data = {
         name: s.name,
         status: mapStatus(s.status),
-        dailyBudget: money(s.daily_budget),
-        lifetimeBudget: money(s.lifetime_budget),
-        bidAmount: money(s.bid_amount),
+        dailyBudget: budgetFromMinor(s.daily_budget, account.currency),
+        lifetimeBudget: budgetFromMinor(s.lifetime_budget, account.currency),
+        bidAmount: budgetFromMinor(s.bid_amount, account.currency),
         optimizationGoal: s.optimization_goal ?? null,
         billingEvent: s.billing_event ?? null,
         audience: summarizeTargeting(s.targeting),
@@ -1183,38 +1091,6 @@ export async function syncFromFacebook(
 }
 
 /** ຫຍໍ້ targeting ຂອງ Facebook ໃຫ້ເປັນຂໍ້ຄວາມສັ້ນໆ ພໍໃຫ້ຄົນອ່ານເຂົ້າໃຈ */
-function summarizeTargeting(targeting: unknown): string | null {
-  if (!targeting || typeof targeting !== "object") return null;
-  const t = targeting as Record<string, unknown>;
-  const parts: string[] = [];
-
-  const ageMin = t.age_min;
-  const ageMax = t.age_max;
-  if (ageMin || ageMax) parts.push(`ອາຍຸ ${ageMin ?? "?"}-${ageMax ?? "?"}`);
-
-  const genders = t.genders;
-  if (Array.isArray(genders) && genders.length === 1) {
-    parts.push(genders[0] === 1 ? "ຊາຍ" : "ຍິງ");
-  }
-
-  const geo = t.geo_locations as Record<string, unknown> | undefined;
-  const countries = geo?.countries;
-  if (Array.isArray(countries) && countries.length) {
-    parts.push(countries.join(", "));
-  }
-  const cities = geo?.cities;
-  if (Array.isArray(cities) && cities.length) {
-    parts.push(`${cities.length} ເມືອງ`);
-  }
-
-  const interests = (t.flexible_spec ?? t.interests) as unknown;
-  if (Array.isArray(interests) && interests.length) {
-    parts.push(`ຄວາມສົນໃຈ ${interests.length} ກຸ່ມ`);
-  }
-
-  return parts.length ? parts.join(" · ") : null;
-}
-
 /** ອັດຕາແລກປ່ຽນຂອງວັນນັ້ນ — ບໍ່ມີກໍ່ໃຊ້ຄ່າ default */
 async function fxRateFor(
   date: Date,
