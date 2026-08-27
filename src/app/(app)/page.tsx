@@ -24,7 +24,12 @@ import { AdviceList } from "@/components/AdviceList";
 import { actionable, buildAdvice, waiting } from "@/lib/advice";
 import { loadMoney } from "@/lib/money-server";
 import { orderEconomics } from "@/lib/advice-rules";
-import { sumOrderTotals, type OrderFinancialRow } from "@/lib/orders";
+import {
+  deriveOrderEconomics,
+  groupOrderTotals,
+  sumOrderTotals,
+  type OrderFinancialRow,
+} from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +104,7 @@ export default async function DashboardPage({
       where: { date: { gte: parseDate(range.from), lte: parseDate(range.to) } },
       select: {
         date: true,
+        campaignId: true,
         status: true,
         saleAmount: true,
         productCost: true,
@@ -113,12 +119,12 @@ export default async function DashboardPage({
   const prevTotal = aggregate(prevRows);
   const orderTotals = sumOrderTotals(orderRows as OrderFinancialRow[]);
 
-  /** ກຳໄລ ແລະ ROAS ທີ່ເຊື່ອຖືໄດ້ — ໃຊ້ອໍເດີກ່ອນສະເໝີ ຖ້າມີ */
-  const realRevenue = orderTotals.netRevenue || total.revenue;
-  const realProfit = econ
-    ? econ.contributionProfit
-    : realRevenue - total.spendLak;
-  const realRoas = total.spendLak > 0 ? realRevenue / total.spendLak : 0;
+  /** ບໍ່ fallback ໄປ Insight.revenue — ຖ້າບໍ່ມີ Order ຕ້ອງບອກວ່າຂາດຂໍ້ມູນ. */
+  const hasOrderData = orderRows.length > 0;
+  const actual = deriveOrderEconomics(orderTotals, total.spendLak);
+  const realRevenue = actual.netRevenue;
+  const realProfit = actual.contributionProfit;
+  const realRoas = actual.actualRoas;
   const advice = await buildAdvice(range);
   const topAdvice = actionable(advice).slice(0, 4);
   const blocked = waiting(advice).slice(0, 2);
@@ -131,16 +137,14 @@ export default async function DashboardPage({
   const spendSeries = days.map((d) => byDay.get(d)?.spendLak ?? 0);
   const orderRevenueByDay = new Map<string, number>();
   for (const o of orderRows) {
-    if (o.status === "CANCELLED" || o.status === "RETURNED") continue;
+    if (o.status !== "DELIVERED") continue;
     const k = toDateInput(o.date);
     orderRevenueByDay.set(
       k,
       (orderRevenueByDay.get(k) ?? 0) + o.saleAmount - o.refundAmount,
     );
   }
-  const revenueSeries = days.map(
-    (d) => orderRevenueByDay.get(d) ?? byDay.get(d)?.revenue ?? 0,
-  );
+  const revenueSeries = days.map((d) => orderRevenueByDay.get(d) ?? 0);
   const messageSeries = days.map((d) => byDay.get(d)?.messages ?? 0);
 
   // ---- ຈັດອັນດັບແຄມເປນ
@@ -149,8 +153,22 @@ export default async function DashboardPage({
     rows.filter((r) => r.campaignId),
     (r) => r.campaignId as string,
   );
+  const ordersByCampaign = groupOrderTotals(
+    orderRows.filter((r) => r.campaignId),
+    (r) => r.campaignId as string,
+  );
   const ranked = [...byCampaign.entries()]
-    .map(([id, t]) => ({ id, name: campaignName.get(id) ?? "—", ...derive(t) }))
+    .map(([id, t]) => {
+      const ad = derive(t);
+      const order = ordersByCampaign.get(id);
+      return {
+        id,
+        name: campaignName.get(id) ?? "—",
+        ...ad,
+        ...(order ? deriveOrderEconomics(order, ad.spendLak) : {}),
+        hasOrderData: Boolean(order),
+      };
+    })
     .sort((a, b) => b.spendLak - a.spendLak);
 
   const topSpend: BarRow[] = ranked.slice(0, 7).map((c) => ({
@@ -159,13 +177,15 @@ export default async function DashboardPage({
     href: `/campaigns/${c.id}`,
     value: c.spendLak,
     display: money(c.spendLak),
-    sub: c.spendLak ? `ROAS ${c.roas.toFixed(2)}x` : undefined,
+    sub: c.hasOrderData
+      ? `Actual ROAS ${(c.actualRoas ?? 0).toFixed(2)}x`
+      : "ຍັງບໍ່ຜູກ Order",
   }));
 
   // ແຄມເປນທີ່ໃຊ້ເງິນແລ້ວແຕ່ຍັງບໍ່ຄຸ້ມ — ຈັດຕາມເງິນທີ່ຂາດທຶນຫຼາຍສຸດ
   const needsAttention = ranked
-    .filter((c) => c.spendLak > 0 && c.roas < 1)
-    .sort((a, b) => a.profit - b.profit)
+    .filter((c) => c.spendLak > 0 && c.hasOrderData && (c.contributionProfit ?? 0) < 0)
+    .sort((a, b) => (a.contributionProfit ?? 0) - (b.contributionProfit ?? 0))
     .slice(0, 5);
 
   return (
@@ -175,8 +195,11 @@ export default async function DashboardPage({
         description={`${activeCampaigns} ແຄມເປນກຳລັງຍິງ · ລູກຄ້າໃໝ່ທີ່ຍັງບໍ່ໄດ້ຕິດຕໍ່ ${newLeads} ຄົນ`}
         action={
           <>
-            <Link href="/campaigns/new" className="btn btn-primary">
+            <Link href="/campaigns/new" className="btn">
               + ສ້າງແຄມເປນ
+            </Link>
+            <Link href="/orders" className="btn btn-primary">
+              + ເພີ່ມ Order
             </Link>
           </>
         }
@@ -185,31 +208,44 @@ export default async function DashboardPage({
       <DateRangeBar basePath="/" range={range} activePreset={sp.preset} />
 
       {/* ຕົວເລກນຳ — ກຳໄລຈິງຈາກອໍເດີ ບໍ່ແມ່ນຈາກ pixel ຂອງ Facebook */}
-      <Card className="mb-5 flex flex-wrap items-end justify-between gap-6 p-5">
-        <div>
-          <p className="text-sm text-[var(--fg-muted)]">
-            ກຳໄລສຸດທິ
-            <span className="ml-1 text-xs text-[var(--fg-subtle)]">
-              {econ ? "(ຍອດຂາຍ − ຕົ້ນທຶນ − ຄ່າສົ່ງ − ຄ່າໂຄສະນາ)" : "(ຍອດຂາຍ − ຄ່າໂຄສະນາ)"}
-            </span>
-          </p>
-          <p
-            className={`mt-1 text-5xl font-semibold leading-none ${
-              realProfit >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]"
-            }`}
-          >
-            {money(realProfit)}
-          </p>
-          <p className="mt-2 text-sm text-[var(--fg-muted)]">
-            {formatDateLao(range.from)} — {formatDateLao(range.to)}
-          </p>
-        </div>
-
-        <dl className="flex flex-wrap gap-x-8 gap-y-3">
+      <Card className="performance-hero mb-6 overflow-hidden p-5 sm:p-7">
+        <div className="relative z-10 flex flex-wrap items-end justify-between gap-7">
           <div>
-            <dt className="text-xs text-[var(--fg-muted)]">ROAS</dt>
-            <dd className="text-xl font-semibold">
-              {total.spendLak ? `${realRoas.toFixed(2)}x` : "—"}
+            <div className="mb-3 flex items-center gap-2">
+              <span className={`h-2 w-2 rounded-full ${hasOrderData ? "bg-[var(--success)]" : "bg-[var(--warning)]"}`} />
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--fg-muted)]">
+                ກຳໄລຈິງຫຼັງຄ່າ Ads
+              </p>
+            </div>
+            <p
+              className={`text-4xl font-bold leading-none tracking-[-0.05em] sm:text-6xl ${
+                !hasOrderData
+                  ? "text-[var(--fg-subtle)]"
+                  : realProfit >= 0
+                    ? "text-[var(--success)]"
+                    : "text-[var(--danger)]"
+              }`}
+            >
+              {hasOrderData ? money(realProfit) : "—"}
+            </p>
+            <p className="mt-3 text-sm text-[var(--fg-muted)]">
+              {hasOrderData
+                ? "ຍອດຂາຍ − ຕົ້ນທຶນ − ຄ່າສົ່ງ − ຄ່າໂຄສະນາ"
+                : "ຍັງບໍ່ມີ Order ໃນຊ່ວງນີ້ — ບໍ່ໃຊ້ Meta revenue ມາເດົາກຳໄລ"}
+            </p>
+            <p className="mt-1 text-xs text-[var(--fg-subtle)]">
+              {formatDateLao(range.from)} — {formatDateLao(range.to)}
+            </p>
+            {!hasOrderData ? (
+              <Link href="/orders" className="btn btn-primary mt-4">+ ເພີ່ມ Order ທຳອິດ</Link>
+            ) : null}
+          </div>
+
+          <dl className="hero-metrics flex flex-wrap gap-2 sm:gap-3">
+          <div>
+            <dt>Actual ROAS</dt>
+            <dd>
+              {hasOrderData && total.spendLak ? `${realRoas.toFixed(2)}x` : "—"}
             </dd>
             {econ ? (
               <dd className="text-[0.7rem] text-[var(--fg-subtle)]">
@@ -218,19 +254,20 @@ export default async function DashboardPage({
             ) : null}
           </div>
           <div>
-            <dt className="text-xs text-[var(--fg-muted)]">ຄ່າໂຄສະນາ</dt>
-            <dd className="text-xl font-semibold">{money(total.spendLak)}</dd>
+            <dt>ຄ່າໂຄສະນາ</dt>
+            <dd>{money(total.spendLak)}</dd>
           </div>
           <div>
-            <dt className="text-xs text-[var(--fg-muted)]">ຍອດຂາຍ</dt>
-            <dd className="text-xl font-semibold">{money(realRevenue)}</dd>
+            <dt>ຍອດຂາຍຈິງ</dt>
+            <dd>{hasOrderData ? money(realRevenue) : "—"}</dd>
             {orderTotals.delivered > 0 ? (
               <dd className="text-[0.7rem] text-[var(--fg-subtle)]">
                 {formatCompact(orderTotals.delivered)} ອໍເດີສົ່ງສຳເລັດ
               </dd>
             ) : null}
           </div>
-        </dl>
+          </dl>
+        </div>
       </Card>
 
       {topAdvice.length > 0 ? (
@@ -352,13 +389,13 @@ export default async function DashboardPage({
 
         <Card>
           <CardHeader
-            title="ຕ້ອງເບິ່ງດ່ວນ — ROAS ຕ່ຳກວ່າ 1"
-            subtitle="ໃຊ້ເງິນໄປແລ້ວ ແຕ່ຍອດຂາຍຍັງບໍ່ຄຸ້ມຄ່າໂຄສະນາ"
+            title="ຕ້ອງເບິ່ງດ່ວນ — ຂາດທຶນຈາກ Order ຈິງ"
+            subtitle="ຄິດຫຼັງຫັກຕົ້ນທຶນ, ຄ່າສົ່ງ ແລະຄ່າ Ads"
           />
           {needsAttention.length === 0 ? (
             <EmptyState
-              title="ບໍ່ມີແຄມເປນທີ່ຂາດທຶນ"
-              hint="ທຸກແຄມເປນທີ່ໃຊ້ເງິນ ມີ ROAS ຕັ້ງແຕ່ 1 ຂຶ້ນໄປ"
+              title="ບໍ່ພົບແຄມເປນທີ່ມີ Order ແລ້ວຂາດທຶນ"
+              hint="Campaign ທີ່ຍັງບໍ່ຜູກ Order ຈະບໍ່ຖືກເດົາວ່າກຳໄລ ຫຼື ຂາດທຶນ"
             />
           ) : (
             <div className="table-wrap">
@@ -381,11 +418,11 @@ export default async function DashboardPage({
                         </Link>
                       </td>
                       <td className="num">{money(c.spendLak)}</td>
-                      <td className="num">{money(c.revenue)}</td>
+                      <td className="num">{money(c.netRevenue ?? 0)}</td>
                       <td className="num text-[var(--danger)]">
-                        {money(c.profit)}
+                        {money(c.contributionProfit ?? 0)}
                       </td>
-                      <td className="num">{c.roas.toFixed(2)}x</td>
+                      <td className="num">{(c.actualRoas ?? 0).toFixed(2)}x</td>
                     </tr>
                   ))}
                 </tbody>

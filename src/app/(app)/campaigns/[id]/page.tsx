@@ -34,6 +34,11 @@ import {
 } from "@/lib/labels";
 import { totalsScope } from "@/lib/scope";
 import { loadMoney } from "@/lib/money-server";
+import {
+  deriveOrderEconomics,
+  groupOrderTotals,
+  sumOrderTotals,
+} from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +69,7 @@ export default async function CampaignDetailPage({
   });
   if (!campaign) notFound();
 
-  const [rows, prevRows, adSetTotals] = await Promise.all([
+  const [rows, prevRows, adSetTotals, orderRows, prevOrderRows] = await Promise.all([
     prisma.insight.findMany({
       where: {
         ...totalsScope,
@@ -91,17 +96,53 @@ export default async function CampaignDetailPage({
       },
       _sum: { spendLak: true, impressions: true, clicks: true, messages: true },
     }),
+    prisma.order.findMany({
+      where: {
+        campaignId: id,
+        date: { gte: parseDate(range.from), lte: parseDate(range.to) },
+      },
+      select: {
+        date: true,
+        status: true,
+        saleAmount: true,
+        productCost: true,
+        shippingCost: true,
+        otherCost: true,
+        refundAmount: true,
+      },
+    }),
+    prisma.order.findMany({
+      where: {
+        campaignId: id,
+        date: { gte: parseDate(prev.from), lte: parseDate(prev.to) },
+      },
+      select: {
+        status: true,
+        saleAmount: true,
+        productCost: true,
+        shippingCost: true,
+        otherCost: true,
+        refundAmount: true,
+      },
+    }),
   ]);
 
   const total = aggregate(rows);
   const prevTotal = aggregate(prevRows);
+  const actual = deriveOrderEconomics(sumOrderTotals(orderRows), total.spendLak);
+  const prevActual = deriveOrderEconomics(
+    sumOrderTotals(prevOrderRows),
+    prevTotal.spendLak,
+  );
+  const hasOrderData = orderRows.length > 0;
   const adSetMap = new Map(adSetTotals.map((g) => [g.adSetId as string, g._sum]));
 
   const days = eachDay(range);
   const byDay = groupTotals(rows, (r) => toDateInput(r.date));
   const labels = days.map(formatDayShort);
   const spendSeries = days.map((d) => byDay.get(d)?.spendLak ?? 0);
-  const revenueSeries = days.map((d) => byDay.get(d)?.revenue ?? 0);
+  const ordersByDay = groupOrderTotals(orderRows, (r) => toDateInput(r.date));
+  const revenueSeries = days.map((d) => ordersByDay.get(d)?.netRevenue ?? 0);
 
   const create = createAdSet.bind(null, id);
 
@@ -118,7 +159,7 @@ export default async function CampaignDetailPage({
               ← ລາຍການ
             </Link>
             <Link href="/analysis" className="btn">
-              ບັນທຶກຜົນ
+              ວິເຄາະ
             </Link>
             <Link href={`/campaigns/${id}/edit`} className="btn btn-primary">
               ແກ້ໄຂ
@@ -145,7 +186,7 @@ export default async function CampaignDetailPage({
 
       <DateRangeBar basePath={`/campaigns/${id}`} range={range} activePreset={sp.preset} />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatTile
           label="ຄ່າໂຄສະນາ"
           value={money(total.spendLak)}
@@ -167,18 +208,25 @@ export default async function CampaignDetailPage({
           upIsGood={false}
         />
         <StatTile
-          label="ROAS"
-          value={total.spendLak ? `${total.roas.toFixed(2)}x` : "—"}
-          current={total.roas}
-          previous={prevTotal.roas}
-          hint={`ຍອດຂາຍ ${money(total.revenue)}`}
+          label="Order ສົ່ງສຳເລັດ"
+          value={hasOrderData ? formatCompact(actual.delivered) : "—"}
+          current={hasOrderData ? actual.delivered : undefined}
+          previous={prevOrderRows.length ? prevActual.delivered : undefined}
+          hint={hasOrderData ? `ຕີກັບ ${actual.returned}` : "ຍັງບໍ່ຜູກ Order"}
+        />
+        <StatTile
+          label="Actual ROAS"
+          value={hasOrderData && total.spendLak ? `${actual.actualRoas.toFixed(2)}x` : "—"}
+          current={hasOrderData ? actual.actualRoas : undefined}
+          previous={prevOrderRows.length ? prevActual.actualRoas : undefined}
+          hint={hasOrderData ? `ຍອດຈິງ ${money(actual.netRevenue)}` : "ບໍ່ເດົາຈາກ Meta revenue"}
         />
       </div>
 
       <Card className="mb-5">
         <CardHeader
-          title="ຄ່າໂຄສະນາ ທຽບ ຍອດຂາຍ ລາຍວັນ"
-          subtitle="ທັງສອງເສັ້ນເປັນສະກຸນກີບ ຈຶ່ງໃຊ້ແກນດຽວກັນ"
+          title="ຄ່າໂຄສະນາ ທຽບ ຍອດຂາຍຈິງ ລາຍວັນ"
+          subtitle="ຍອດຂາຍນັບສະເພາະ Order ທີ່ສົ່ງສຳເລັດ"
         />
         <TrendChart
           currency={currency}
@@ -186,7 +234,7 @@ export default async function CampaignDetailPage({
           labels={labels}
           series={[
             { name: "ຄ່າໂຄສະນາ", color: "var(--chart-1)", values: spendSeries },
-            { name: "ຍອດຂາຍ", color: "var(--chart-3)", values: revenueSeries },
+            { name: "ຍອດຂາຍຈິງ", color: "var(--chart-3)", values: revenueSeries },
           ]}
           valueFormat="lak"
         />
@@ -279,8 +327,8 @@ export default async function CampaignDetailPage({
                       <th className="num">ຄລິກ</th>
                       <th className="num">CTR</th>
                       <th className="num">ທັກ</th>
-                      <th className="num">ອໍເດີ</th>
-                      <th className="num">ຍອດຂາຍ</th>
+                      <th className="num">Meta Purchase</th>
+                      <th className="num">Meta Action Value</th>
                       <th>ທີ່ມາ</th>
                     </tr>
                   </thead>

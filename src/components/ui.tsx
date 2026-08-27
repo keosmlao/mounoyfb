@@ -27,11 +27,11 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+    <div className="card-header flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
       <div>
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="text-[0.95rem] font-semibold tracking-[-0.01em]">{title}</h2>
         {subtitle ? (
-          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{subtitle}</p>
+          <p className="mt-1 text-xs text-[var(--fg-muted)]">{subtitle}</p>
         ) : null}
       </div>
       {action}
@@ -49,11 +49,14 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="page-header mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <p className="mb-1.5 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[var(--brand)]">
+          FBMONOY · Operations
+        </p>
+        <h1 className="text-2xl font-bold tracking-[-0.035em] sm:text-[1.75rem]">{title}</h1>
         {description ? (
-          <p className="mt-1 text-sm text-[var(--fg-muted)]">{description}</p>
+          <p className="mt-1.5 max-w-3xl text-sm text-[var(--fg-muted)]">{description}</p>
         ) : null}
       </div>
       {action ? <div className="flex gap-2">{action}</div> : null}

@@ -3,6 +3,7 @@ import { addDays, parseDate, formatDateLao, todayStr } from "./date";
 import { formatMoney, formatPercent, safeDiv } from "./format";
 import { loadMoney } from "./money-server";
 import { totalsScope } from "./scope";
+import { sumOrderTotals } from "./orders";
 
 /**
  * ເຄື່ອງກວດເຕືອນ — ອ່ານຂໍ້ມູນທີ່ບັນທຶກໄວ້ ແລ້ວບອກວ່າມີຫຍັງຕ້ອງເບິ່ງ.
@@ -103,7 +104,7 @@ export async function buildAlerts(): Promise<Alert[]> {
   const yesterday = addDays(today, -1);
   const weekAgo = addDays(today, -7);
 
-  const [campaigns, accounts, yesterdayRows, weekRows, allTimeByCampaign, staleLeads] =
+  const [campaigns, accounts, yesterdayRows, weekRows, weekOrders, allTimeByCampaign, staleLeads] =
     await Promise.all([
       prisma.campaign.findMany({
         where: { status: { in: ["ACTIVE", "PAUSED"] } },
@@ -120,7 +121,22 @@ export async function buildAlerts(): Promise<Alert[]> {
           ...totalsScope,
           date: { gte: parseDate(weekAgo), lte: parseDate(today) },
         },
-        _sum: { spendLak: true, revenue: true, messages: true },
+        _sum: { spendLak: true, messages: true },
+      }),
+      prisma.order.findMany({
+        where: {
+          date: { gte: parseDate(weekAgo), lte: parseDate(today) },
+          campaignId: { not: null },
+        },
+        select: {
+          campaignId: true,
+          status: true,
+          saleAmount: true,
+          productCost: true,
+          shippingCost: true,
+          otherCost: true,
+          refundAmount: true,
+        },
       }),
       prisma.insight.groupBy({
         by: ["campaignId", "adAccountId"],
@@ -151,11 +167,18 @@ export async function buildAlerts(): Promise<Alert[]> {
       r.campaignId as string,
       {
         spendLak: r._sum.spendLak ?? 0,
-        revenue: r._sum.revenue ?? 0,
         messages: r._sum.messages ?? 0,
       },
     ]),
   );
+
+  const orderRowsByCampaign = new Map<string, typeof weekOrders>();
+  for (const row of weekOrders) {
+    if (!row.campaignId) continue;
+    const list = orderRowsByCampaign.get(row.campaignId) ?? [];
+    list.push(row);
+    orderRowsByCampaign.set(row.campaignId, list);
+  }
 
   const spendByCampaign = new Map<string, number>();
   const spendByAccount = new Map<string, number>();
@@ -221,17 +244,19 @@ export async function buildAlerts(): Promise<Alert[]> {
     const expectsRevenue =
       campaign.objective === "SALES" || campaign.objective === "MESSAGES";
     const week = weekByCampaign.get(campaign.id);
-    if (expectsRevenue && week && week.spendLak > 0) {
-      const roas = safeDiv(week.revenue, week.spendLak);
+    const actualOrders = sumOrderTotals(orderRowsByCampaign.get(campaign.id) ?? []);
+    const hasClosedOrders = actualOrders.delivered + actualOrders.returned > 0;
+    if (expectsRevenue && week && week.spendLak > 0 && hasClosedOrders) {
+      const roas = safeDiv(actualOrders.netRevenue, week.spendLak);
       if (roas < thresholds.roasMin) {
         alerts.push({
           id: `roas:${campaign.id}`,
           severity: roas < thresholds.roasMin / 2 ? "serious" : "warning",
           category: "ຜົນຕອບແທນ",
-          title: `ROAS ຕ່ຳກວ່າເປົ້າ: ${campaign.name}`,
-          detail: `7 ວັນຫຼ້າສຸດ ROAS ${roas.toFixed(2)}x (ເປົ້າ ${thresholds.roasMin}x) · ໃຊ້ ${money(
+          title: `Actual ROAS ຕ່ຳກວ່າເປົ້າ: ${campaign.name}`,
+          detail: `7 ວັນຫຼ້າສຸດ Actual ROAS ${roas.toFixed(2)}x (ເປົ້າ ${thresholds.roasMin}x) · ໃຊ້ ${money(
             week.spendLak,
-          )} ໄດ້ຍອດຂາຍ ${money(week.revenue)}`,
+          )} ໄດ້ຍອດຂາຍຈິງ ${money(actualOrders.netRevenue)} ຈາກ ${actualOrders.delivered} Order ສົ່ງສຳເລັດ`,
           href,
         });
       }

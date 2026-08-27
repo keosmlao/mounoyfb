@@ -35,14 +35,14 @@ export function DateRangeBar({
   };
 
   return (
-    <div className="card mb-5 flex flex-wrap items-end gap-3 p-3">
-      <div className="flex flex-wrap gap-1.5">
+    <div className="date-range-bar card mb-6 flex flex-wrap items-center gap-3 p-2.5">
+      <div className="date-presets flex flex-wrap gap-1 rounded-xl bg-[var(--surface-2)] p-1">
         {PRESETS.map((p) => (
           <Link
             key={p.key}
             href={presetHref(p.key)}
-            className={`btn btn-sm ${
-              activePreset === p.key ? "btn-primary" : ""
+            className={`date-preset ${
+              activePreset === p.key ? "date-preset-active" : ""
             }`}
           >
             {p.label}
@@ -50,29 +50,29 @@ export function DateRangeBar({
         ))}
       </div>
 
-      <form method="get" action={basePath} className="flex flex-wrap items-end gap-2">
+      <form method="get" action={basePath} className="flex flex-wrap items-end gap-2 lg:ml-1">
         {keepEntries.map(([k, v]) => (
           <input key={k} type="hidden" name={k} value={v as string} />
         ))}
         <div>
-          <label className="label">ແຕ່ວັນທີ່</label>
+          <label className="label !text-[0.7rem]">ແຕ່ວັນທີ່</label>
           <input
             type="date"
             name="from"
             defaultValue={range.from}
-            className="field"
+            className="field !py-1.5"
           />
         </div>
         <div>
-          <label className="label">ຫາວັນທີ່</label>
-          <input type="date" name="to" defaultValue={range.to} className="field" />
+          <label className="label !text-[0.7rem]">ຫາວັນທີ່</label>
+          <input type="date" name="to" defaultValue={range.to} className="field !py-1.5" />
         </div>
         <button type="submit" className="btn">
           ນຳໃຊ້
         </button>
       </form>
 
-      <p className="ml-auto text-xs text-[var(--fg-muted)]">
+      <p className="ml-auto hidden text-xs text-[var(--fg-muted)] 2xl:block">
         ກຳລັງເບິ່ງ: {formatDateLao(range.from)} — {formatDateLao(range.to)}
       </p>
     </div>

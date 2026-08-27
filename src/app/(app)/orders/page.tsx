@@ -85,6 +85,7 @@ export default async function OrdersPage({
       <PageHeader
         title="Orders ແລະ ຍອດຂາຍຈິງ"
         description="ແຫຼ່ງຄວາມຈິງຂອງຍອດຂາຍ, ຕົ້ນທຶນ, ການສົ່ງສຳເລັດ ແລະຕີກັບ"
+        action={<Link href="/orders/import" className="btn">⤒ ນຳເຂົ້າ Excel / CSV</Link>}
       />
 
       <DateRangeBar
@@ -106,7 +107,7 @@ export default async function OrdersPage({
         />
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_430px]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
         <div className="grid gap-5">
           <Card>
             <form method="get" action="/orders" className="flex flex-wrap items-end gap-3 p-3">
@@ -207,7 +208,7 @@ export default async function OrdersPage({
           </Card>
         </div>
 
-        <Card className="h-fit">
+        <Card className="h-fit xl:sticky xl:top-8">
           <CardHeader title="ເພີ່ມ Order" subtitle="ລາຄາ/ຕົ້ນທຶນຈະຖືກ snapshot ໄວ້" />
           {products.length === 0 ? (
             <div className="border-b border-[var(--border)] p-4 text-sm text-[var(--warning)]">

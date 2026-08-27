@@ -14,6 +14,7 @@ import {
 import type { EntityStatus } from "@/generated/prisma/enums";
 import { totalsScope } from "@/lib/scope";
 import { loadMoney } from "@/lib/money-server";
+import { deriveOrderEconomics, groupOrderTotals } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,7 @@ export default async function CampaignsPage({
     ...(sp.q ? { name: { contains: sp.q, mode: "insensitive" as const } } : {}),
   };
 
-  const [campaigns, accounts, grouped] = await Promise.all([
+  const [campaigns, accounts, grouped, orderRows] = await Promise.all([
     prisma.campaign.findMany({
       where,
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -73,6 +74,21 @@ export default async function CampaignsPage({
         videoViews: true,
       },
     }),
+    prisma.order.findMany({
+      where: {
+        campaignId: { not: null },
+        date: { gte: parseDate(range.from), lte: parseDate(range.to) },
+      },
+      select: {
+        campaignId: true,
+        status: true,
+        saleAmount: true,
+        productCost: true,
+        shippingCost: true,
+        otherCost: true,
+        refundAmount: true,
+      },
+    }),
   ]);
 
   const totalsByCampaign = new Map<string, Totals>(
@@ -91,6 +107,10 @@ export default async function CampaignsPage({
         videoViews: g._sum.videoViews ?? 0,
       },
     ]),
+  );
+  const ordersByCampaign = groupOrderTotals(
+    orderRows,
+    (row) => row.campaignId as string,
   );
 
   return (
@@ -191,14 +211,19 @@ export default async function CampaignsPage({
                   <th className="num">CTR</th>
                   <th className="num">ທັກແຊັດ</th>
                   <th className="num">ຄ່າ/ທັກ</th>
-                  <th className="num">ອໍເດີ</th>
-                  <th className="num">ຍອດຂາຍ</th>
-                  <th className="num">ROAS</th>
+                  <th className="num">Meta Purchase</th>
+                  <th className="num">ສົ່ງສຳເລັດ</th>
+                  <th className="num">ຍອດຂາຍຈິງ</th>
+                  <th className="num">Actual ROAS</th>
                 </tr>
               </thead>
               <tbody>
                 {campaigns.map((c) => {
                   const d = derive(totalsByCampaign.get(c.id) ?? EMPTY_TOTALS);
+                  const actual = ordersByCampaign.get(c.id);
+                  const economics = actual
+                    ? deriveOrderEconomics(actual, d.spendLak)
+                    : null;
                   return (
                     <tr key={c.id}>
                       <td>
@@ -226,18 +251,25 @@ export default async function CampaignsPage({
                         {d.messages ? money(d.costPerMessage) : "—"}
                       </td>
                       <td className="num">{formatCompact(d.purchases)}</td>
-                      <td className="num">{money(d.revenue)}</td>
+                      <td className="num">
+                        {economics ? formatCompact(economics.delivered) : "—"}
+                      </td>
+                      <td className="num">
+                        {economics ? money(economics.netRevenue) : "—"}
+                      </td>
                       <td className="num">
                         <span
                           className={
-                            d.roas >= 1
+                            economics && economics.contributionProfit >= 0
                               ? "text-[var(--success)]"
-                              : d.roas > 0
+                              : economics
                                 ? "text-[var(--danger)]"
                                 : ""
                           }
                         >
-                          {d.spendLak ? `${d.roas.toFixed(2)}x` : "—"}
+                          {economics && d.spendLak
+                            ? `${economics.actualRoas.toFixed(2)}x`
+                            : "—"}
                         </span>
                       </td>
                     </tr>
