@@ -114,6 +114,50 @@ async function graphOne<T>(
   return json;
 }
 
+/** ຂຽນຄ່າກັບໄປ Facebook (POST) — ໃຊ້ token ຫຼັກ ຈຶ່ງຕ້ອງມີສິດ `ads_management` */
+async function graphWrite(
+  config: FbConfig,
+  path: string,
+  body: Record<string, string>,
+): Promise<void> {
+  const res = await fetch(`${GRAPH}/${config.apiVersion}/${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ ...body, access_token: config.accessToken }).toString(),
+  });
+  const json = (await res.json()) as {
+    success?: boolean;
+    error?: { message: string; code: number };
+  };
+  if (json.error) {
+    throw new Error(`Facebook API: ${json.error.message} (code ${json.error.code})`);
+  }
+}
+
+/** ສະຖານະທີ່ສັ່ງກັບໄປ Facebook ໄດ້ — ອັນອື່ນເປັນສະຖານະພາຍໃນລະບົບເຮົາເອງ */
+export type FbRunStatus = "ACTIVE" | "PAUSED";
+
+/**
+ * ຢຸດ / ໃຫ້ຍິງຕໍ່ ຢູ່ Facebook ຕົວຈິງ.
+ *
+ * ໃຊ້ໄດ້ກັບທັງ campaign / ad set / ad ເພາະ Graph API ໃຊ້ຮູບແບບດຽວກັນ:
+ * `POST /{id}` ພ້ອມ `status`. ຢຸດແຄມເປນ = ຢຸດທຸກຊຸດ/ຊິ້ນທີ່ຢູ່ລຸ່ມມັນນຳ.
+ *
+ * ຖ້າ token ຂາດສິດ `ads_management` Facebook ຈະຕອບຜິດພາດກັບມາ ແລະ
+ * ຜູ້ເອີ້ນຕ້ອງບໍ່ໄປອັບເດດສະຖານະໃນຖານຂໍ້ມູນ — ບໍ່ດັ່ງນັ້ນໜ້າຈໍຈະໂຊຫຼອກ.
+ */
+export async function setFbRunStatus(
+  fbId: string,
+  status: FbRunStatus,
+): Promise<void> {
+  const config = await getFbConfig();
+  if (!config) {
+    throw new Error("ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token — ສັ່ງໄປ Facebook ບໍ່ໄດ້");
+  }
+  await graphWrite(config, fbId, { status });
+}
+
 // ------------------------------------------------- ທົດສອບການເຊື່ອມຕໍ່ / ນຳເຂົ້າ
 
 export type FbAssetAccount = {

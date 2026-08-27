@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { DateRangeBar } from "@/components/DateRangeBar";
+import { SubmitButton } from "@/components/SubmitButton";
+import { toggleCampaignStatus } from "./actions";
 import { parseDate, resolveRange } from "@/lib/date";
 import { derive, EMPTY_TOTALS, type Totals } from "@/lib/metrics";
 import { formatCompact, formatPercent } from "@/lib/format";
@@ -215,6 +217,7 @@ export default async function CampaignsPage({
                   <th className="num">ສົ່ງສຳເລັດ</th>
                   <th className="num">ຍອດຂາຍຈິງ</th>
                   <th className="num">Actual ROAS</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -224,6 +227,14 @@ export default async function CampaignsPage({
                   const economics = actual
                     ? deriveOrderEconomics(actual, d.spendLak)
                     : null;
+                  // ຢຸດ/ຍິງຕໍ່ ໄດ້ສະເພາະ 2 ສະຖານະນີ້ — ອັນອື່ນ (ຮ່າງ/ຈົບ/ຄັງ) ບໍ່ມີຄວາມໝາຍ
+                  const runnable =
+                    c.status === "ACTIVE" || c.status === "PAUSED";
+                  const toggle = toggleCampaignStatus.bind(
+                    null,
+                    c.id,
+                    c.status === "ACTIVE" ? "PAUSED" : "ACTIVE",
+                  );
                   return (
                     <tr key={c.id}>
                       <td>
@@ -271,6 +282,18 @@ export default async function CampaignsPage({
                             ? `${economics.actualRoas.toFixed(2)}x`
                             : "—"}
                         </span>
+                      </td>
+                      <td className="num">
+                        {runnable ? (
+                          <form action={toggle}>
+                            <SubmitButton
+                              className="btn btn-sm"
+                              pendingText="..."
+                            >
+                              {c.status === "ACTIVE" ? "ຢຸດ" : "ຍິງຕໍ່"}
+                            </SubmitButton>
+                          </form>
+                        ) : null}
                       </td>
                     </tr>
                   );

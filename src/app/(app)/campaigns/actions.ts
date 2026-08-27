@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
 import { date, enumVal, num, reqStr, str } from "@/lib/form";
 import { CampaignObjective, EntityStatus } from "@/generated/prisma/enums";
+import { getFbConfig, setFbRunStatus } from "@/lib/fb";
 
 const STATUSES = Object.values(EntityStatus);
 const OBJECTIVES = Object.values(CampaignObjective);
@@ -53,12 +54,41 @@ export async function deleteCampaign(id: string) {
   redirect("/campaigns");
 }
 
-/** ປ່ຽນສະຖານະໄວຈາກໜ້າລາຍການ (ຢຸດ / ຍິງຕໍ່) */
+/**
+ * ຢຸດ / ໃຫ້ຍິງຕໍ່ ແຄມເປນ.
+ *
+ * ແຄມເປນທີ່ຜູກກັບ Facebook (ມີ `fbCampaignId`) ຈະຖືກສັ່ງໄປ Facebook **ກ່ອນ**
+ * ແລ້ວຈຶ່ງບັນທຶກລົງຖານຂໍ້ມູນ — ຖ້າ Facebook ປະຕິເສດ (ເຊັ່ນ token ຂາດສິດ
+ * `ads_management`) ຈະ throw ອອກໄປ ແລະ ສະຖານະໃນລະບົບບໍ່ຖືກປ່ຽນ
+ * ເພື່ອບໍ່ໃຫ້ໜ້າຈໍບອກວ່າ “ຢຸດແລ້ວ” ທັງທີ່ຄວາມຈິງຍັງຍິງເງິນຢູ່.
+ *
+ * ແຄມເປນທີ່ປ້ອນມື (ບໍ່ມີ `fbCampaignId`) ປ່ຽນສະເພາະໃນລະບົບເຮົາ.
+ */
 export async function toggleCampaignStatus(id: string, next: EntityStatus) {
   await requireSession();
+
+  const campaign = await prisma.campaign.findUnique({
+    where: { id },
+    select: { fbCampaignId: true },
+  });
+  if (!campaign) throw new Error("ບໍ່ພົບແຄມເປນນີ້ແລ້ວ");
+
+  // ສະເພາະ ຢຸດ/ຍິງຕໍ່ ເທົ່ານັ້ນທີ່ Facebook ຮັບ — ສະຖານະອື່ນເປັນຂອງລະບົບເຮົາເອງ
+  const runStatus =
+    next === EntityStatus.ACTIVE
+      ? "ACTIVE"
+      : next === EntityStatus.PAUSED
+        ? "PAUSED"
+        : null;
+
+  if (campaign.fbCampaignId && runStatus && (await getFbConfig())) {
+    await setFbRunStatus(campaign.fbCampaignId, runStatus);
+  }
+
   await prisma.campaign.update({ where: { id }, data: { status: next } });
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
+  revalidatePath("/");
 }
 
 // ------------------------------------------------------------------ AdSet

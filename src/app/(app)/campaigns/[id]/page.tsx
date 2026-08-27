@@ -13,7 +13,7 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { StatTile } from "@/components/StatTile";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DateRangeBar } from "@/components/DateRangeBar";
-import { createAdSet } from "../actions";
+import { createAdSet, toggleCampaignStatus } from "../actions";
 import {
   eachDay,
   formatDateLao,
@@ -161,6 +161,19 @@ export default async function CampaignDetailPage({
             <Link href="/analysis" className="btn">
               ວິເຄາະ
             </Link>
+            {campaign.status === "ACTIVE" || campaign.status === "PAUSED" ? (
+              <form
+                action={toggleCampaignStatus.bind(
+                  null,
+                  id,
+                  campaign.status === "ACTIVE" ? "PAUSED" : "ACTIVE",
+                )}
+              >
+                <SubmitButton className="btn" pendingText="ກຳລັງສັ່ງ...">
+                  {campaign.status === "ACTIVE" ? "⏸ ຢຸດແຄມເປນ" : "▶ ຍິງຕໍ່"}
+                </SubmitButton>
+              </form>
+            ) : null}
             <Link href={`/campaigns/${id}/edit`} className="btn btn-primary">
               ແກ້ໄຂ
             </Link>
@@ -172,6 +185,11 @@ export default async function CampaignDetailPage({
         <Badge tone={STATUS_TONE[campaign.status]}>
           {STATUS_LABEL[campaign.status]}
         </Badge>
+        <span className="text-xs text-[var(--fg-subtle)]">
+          {campaign.fbCampaignId
+            ? "· ຢຸດ/ຍິງຕໍ່ ມີຜົນກັບ Facebook ຕົວຈິງ"
+            : "· ບໍ່ໄດ້ຜູກກັບ Facebook — ປ່ຽນສະເພາະໃນລະບົບນີ້"}
+        </span>
         {campaign.dailyBudget ? (
           <span>
             ງົບ/ວັນ {campaign.dailyBudget} {campaign.adAccount.currency}

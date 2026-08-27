@@ -59,6 +59,36 @@ const STEPS: Array<{ title: string; body: React.ReactNode }> = [
     ),
   },
   {
+    title: "3.5 ສິດເພີ່ມ — ຢຸດ/ເປີດແຄມເປນ ແລະ ກ່ອງຂໍ້ຄວາມ",
+    body: (
+      <>
+        <code className="rounded bg-[var(--surface-2)] px-1">ads_read</code>{" "}
+        ອ່ານຜົນໄດ້ຢ່າງດຽວ. ຖ້າຢາກໃຊ້ 2 ຢ່າງລຸ່ມນີ້ ຕ້ອງຕິກສິດເພີ່ມຕອນ Generate
+        Token (ແລ້ວເອົາ token ໃໝ່ມາໃສ່ຄືນຢູ່ໜ້ານີ້):
+        <br />
+        <b>ຢຸດ / ໃຫ້ຍິງຕໍ່ ແຄມເປນຈາກລະບົບນີ້</b> →{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">ads_management</code>
+        <br />
+        <b>ອ່ານ/ຕອບ comment ແລະ ແຊັດ</b> →{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">pages_show_list</code>,{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">pages_read_engagement</code>,{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">pages_read_user_content</code>,{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">pages_manage_engagement</code>,{" "}
+        <code className="rounded bg-[var(--surface-2)] px-1">pages_messaging</code>
+        <br />
+        → ຢູ່ Business settings ຕ້ອງ <b>Add Assets → Pages</b> ຕິກເພຈຂອງທ່ານ
+        ໃຫ້ system user ນຳ (ບໍ່ດັ່ງນັ້ນຈະບໍ່ໄດ້ page token)
+        <br />
+        <span className="text-[var(--fg-subtle)]">
+          ຂຶ້ນ <b>(#10) requires pages_read_user_content</b> = ຍັງບໍ່ໄດ້ຕິກສິດນີ້.
+          ຖ້າ App ຢູ່ສະຖານະ <b>Live</b> ແລ້ວຕິກບໍ່ໄດ້ ໃຫ້ສະຫຼັບເປັນ{" "}
+          <b>Development</b> (ເຈົ້າຂອງເພຈໃຊ້ໄດ້ເລີຍ) ຫຼື ຂໍ{" "}
+          <b>Advanced Access</b> ຜ່ານ App Review
+        </span>
+      </>
+    ),
+  },
+  {
     title: "ວິທີໄວກວ່າ (ສຳລັບທົດລອງເທົ່ານັ້ນ)",
     body: (
       <>

@@ -549,6 +549,34 @@ export async function refreshThreadState(threadId: string): Promise<void> {
 
 // ------------------------------------------------------------------ ດຶງທັງໝົດ
 
+/**
+ * ແປງຂໍ້ຜິດພາດຂອງ Facebook ໃຫ້ບອກ **ວິທີແກ້** ບໍ່ແມ່ນແຕ່ລະຫັດ error.
+ * ລະຫັດທີ່ພົບເລື້ອຍທີ່ສຸດຄື 10 / 200 = token ຂາດສິດ.
+ */
+function explain(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("pages_read_user_content")) {
+    return (
+      "token ຂາດສິດ pages_read_user_content (ອ່ານໂພສ/comment ຂອງເພຈ) — " +
+      "ໄປສ້າງ token ໃໝ່ໃຫ້ມີສິດນີ້ ແລ້ວໃສ່ຄືນຢູ່ໜ້າຕັ້ງຄ່າ ແລະ ກົດ “ເຊື່ອມເພຈກັບ Facebook” ອີກເທື່ອ"
+    );
+  }
+  if (message.includes("pages_manage_engagement")) {
+    return "token ຂາດສິດ pages_manage_engagement — ຕອບ/ເຊື່ອງ comment ບໍ່ໄດ້";
+  }
+  if (message.includes("pages_messaging")) {
+    return "token ຂາດສິດ pages_messaging — ອ່ານ/ຕອບແຊັດບໍ່ໄດ້";
+  }
+  if (message.includes("code 190")) {
+    return "token ໝົດອາຍຸ ຫຼື ຖືກຍົກເລີກ — ສ້າງໃໝ່ແລ້ວໃສ່ຢູ່ໜ້າຕັ້ງຄ່າ";
+  }
+  if (message.includes("code 4") || message.includes("code 17")) {
+    return "ຮ້ອງ API ຖີ່ເກີນ (rate limit) — ລໍສັກໜ້ອຍແລ້ວດຶງໃໝ່";
+  }
+  return message;
+}
+
 export type InboxSyncResult = {
   posts: number;
   comments: number;
@@ -572,14 +600,14 @@ export async function syncInbox(): Promise<InboxSyncResult> {
     messages: 0,
     errors: [],
   };
+  // ເກັບໄວ້ແຍກ label ກັບ ຂໍ້ຄວາມ ເພື່ອຮວມອັນທີ່ຊ້ຳກັນຕອນທ້າຍ
+  const failures: { label: string; message: string }[] = [];
 
   // ຫາໂພສໂຄສະນາກ່ອນ — ໃຊ້ token ຫຼັກ (ຝັ່ງໂຄສະນາ) ບໍ່ແມ່ນ token ຂອງເພຈ
   try {
     await pullAdPosts(config.apiVersion, config.accessToken);
   } catch (error) {
-    result.errors.push(
-      `ໂພສໂຄສະນາ: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    failures.push({ label: "ໂພສໂຄສະນາ", message: explain(error) });
   }
 
   const pages = await prisma.fbPage.findMany({
@@ -588,6 +616,8 @@ export async function syncInbox(): Promise<InboxSyncResult> {
   });
 
   for (const page of pages) {
+    // ຝັ່ງ comment ກັບ ຝັ່ງແຊັດ ໃຊ້ສິດຄົນລະຊຸດ — ແຍກກັນໄວ້
+    // ຈຶ່ງດຶງແຊັດໄດ້ ເຖິງວ່າ token ຈະຂາດສິດອ່ານ comment ກໍ່ຕາມ
     try {
       result.posts += await pullPagePosts(config.apiVersion, page);
       // ໂພສໂຄສະນາທີ່ຫາໄດ້ຈາກ ad ຍັງບໍ່ມີຂໍ້ຄວາມ/ລິ້ງ — ຕື່ມໃຫ້ຄົບກ່ອນ
@@ -602,16 +632,31 @@ export async function syncInbox(): Promise<InboxSyncResult> {
       for (const post of posts) {
         result.comments += await pullComments(config.apiVersion, page, post);
       }
+    } catch (error) {
+      failures.push({ label: `${page.name} (comment)`, message: explain(error) });
+    }
 
+    try {
       const chat = await pullThreads(config.apiVersion, page);
       result.threads += chat.threads;
       result.messages += chat.messages;
     } catch (error) {
-      result.errors.push(
-        `${page.name}: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      failures.push({ label: `${page.name} (ແຊັດ)`, message: explain(error) });
     }
   }
+
+  // ຫຼາຍເພຈມັກລົ້ມດ້ວຍເຫດຜົນອັນດຽວກັນ (ເຊັ່ນ token ຂາດສິດ) —
+  // ຮວມໃຫ້ເປັນແຖວດຽວ ຈຶ່ງອ່ານອອກວ່າຕ້ອງແກ້ຫຍັງ ບໍ່ແມ່ນເຫັນຂໍ້ຄວາມຊ້ຳ 3 ເທື່ອ
+  const byMessage = new Map<string, string[]>();
+  for (const failure of failures) {
+    byMessage.set(failure.message, [
+      ...(byMessage.get(failure.message) ?? []),
+      failure.label,
+    ]);
+  }
+  result.errors = [...byMessage].map(
+    ([message, labels]) => `${labels.join(", ")} — ${message}`,
+  );
 
   return result;
 }
