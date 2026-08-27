@@ -3,11 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
 import { StatTile } from "@/components/StatTile";
-import { formatAgo, formatTimeLao } from "@/lib/date";
+import { daysAgo, formatAgo, formatTimeLao } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { inboxState } from "@/lib/auto-sync";
+import { getCannedReplies } from "@/lib/canned";
+import { ReplyBox } from "@/components/ReplyBox";
 import {
   createLeadFromComment,
+  markSelectedHandled,
   pullInboxNow,
   replyComment,
   setCommentHandled,
@@ -16,7 +19,20 @@ import {
 
 export const dynamic = "force-dynamic";
 
-type Search = { tab?: string; page?: string; status?: string };
+type Search = {
+  tab?: string;
+  page?: string;
+  status?: string;
+  /** ຄົ້ນຫາໃນຂໍ້ຄວາມ ຫຼື ຊື່ຄົນ */
+  q?: string;
+  /** ຈຳນວນວັນຍ້ອນຫຼັງ ("all" = ບໍ່ຈຳກັດ) */
+  days?: string;
+  /** ຈຳນວນທີ່ສະແດງ (ໂຫຼດເພີ່ມເທື່ອລະ 100) */
+  show?: string;
+};
+
+/** ສະແດງເທື່ອລະຊຸດ — ກ່ອງທີ່ມີ comment ເປັນຮ້ອຍຈະໜັກເກີນຖ້າອອກໝົດ */
+const PAGE_SIZE = 100;
 
 /** ລິ້ງແທັບ/ຕົວກັ່ນຕອງ — ຮັກສາຄ່າອື່ນທີ່ເລືອກໄວ້ */
 function href(sp: Search, patch: Search) {
@@ -37,11 +53,43 @@ export default async function InboxPage({
   const sp = await searchParams;
   const tab = sp.tab === "chats" ? "chats" : "comments";
   const showAll = sp.status === "all";
+  const limit = Math.min(Number(sp.show) || PAGE_SIZE, 1000);
 
   const pageFilter = sp.page ? { pageId: sp.page } : {};
 
-  const [pages, state, openComments, waitingThreads, comments, threads] =
-    await Promise.all([
+  // ກັ່ນຕອງຕາມວັນ — ຄ່າຕັ້ງຕົ້ນເບິ່ງ 30 ວັນຫຼ້າສຸດ ເພາະ comment ເກົ່າກວ່ານັ້ນ
+  // ຕອບໄປກໍ່ບໍ່ທັນການແລ້ວ (ແລະ Facebook ຫ້າມຕອບເຂົ້າແຊັດເກີນ 7 ວັນ)
+  const days = sp.days === "all" ? null : Number(sp.days) || 30;
+  const since = days ? daysAgo(days) : null;
+
+  const search = sp.q?.trim();
+  const textFilter = search
+    ? {
+        OR: [
+          { message: { contains: search, mode: "insensitive" as const } },
+          { fromName: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
+
+  const commentWhere = {
+    ...pageFilter,
+    ...textFilter,
+    ...(since ? { commentedAt: { gte: since } } : {}),
+    // ສຽງຂອງເພຈເອງບໍ່ແມ່ນວຽກ — ເຫັນໄດ້ຕອນເປີດ "ທັງໝົດ"
+    ...(showAll ? {} : { handled: false, fromPage: false }),
+  };
+
+  const [
+    pages,
+    state,
+    openComments,
+    waitingThreads,
+    comments,
+    threads,
+    matching,
+    canned,
+  ] = await Promise.all([
       prisma.fbPage.findMany({
         orderBy: { name: "asc" },
         select: { id: true, name: true, token: true, inboxOn: true },
@@ -51,13 +99,9 @@ export default async function InboxPage({
       prisma.fbThread.count({ where: { waitingReply: true, handled: false } }),
       tab === "comments"
         ? prisma.fbComment.findMany({
-            where: {
-              ...pageFilter,
-              // ສຽງຂອງເພຈເອງບໍ່ແມ່ນວຽກ — ເຫັນໄດ້ຕອນເປີດ "ທັງໝົດ"
-              ...(showAll ? {} : { handled: false, fromPage: false }),
-            },
+            where: commentWhere,
             orderBy: { commentedAt: "desc" },
-            take: 100,
+            take: limit,
             include: {
               page: { select: { name: true } },
               post: {
@@ -78,13 +122,17 @@ export default async function InboxPage({
               ...(showAll ? {} : { handled: false }),
             },
             orderBy: { lastMessageAt: "desc" },
-            take: 100,
+            take: limit,
             include: {
               page: { select: { name: true } },
               lead: { select: { id: true } },
             },
           })
         : Promise.resolve([]),
+      tab === "comments"
+        ? prisma.fbComment.count({ where: commentWhere })
+        : Promise.resolve(0),
+      getCannedReplies(),
     ]);
 
   const linked = pages.filter((p) => p.token && p.inboxOn).length;
@@ -175,9 +223,25 @@ export default async function InboxPage({
             {showAll ? "ທັງໝົດ" : "ສະເພາະທີ່ຍັງຄ້າງ"}
           </Link>
 
-          <form method="get" action="/inbox" className="ml-auto flex items-end gap-2">
+          <form method="get" action="/inbox" className="ml-auto flex flex-wrap items-end gap-2">
             {tab === "chats" ? <input type="hidden" name="tab" value="chats" /> : null}
             {showAll ? <input type="hidden" name="status" value="all" /> : null}
+            {tab === "comments" ? (
+              <>
+                <input
+                  name="q"
+                  defaultValue={sp.q ?? ""}
+                  placeholder="ຄົ້ນຫາຂໍ້ຄວາມ / ຊື່"
+                  className="field w-44"
+                />
+                <select name="days" defaultValue={sp.days ?? "30"} className="field">
+                  <option value="7">7 ວັນຫຼ້າສຸດ</option>
+                  <option value="30">30 ວັນຫຼ້າສຸດ</option>
+                  <option value="90">90 ວັນຫຼ້າສຸດ</option>
+                  <option value="all">ທຸກເວລາ</option>
+                </select>
+              </>
+            ) : null}
             <select name="page" defaultValue={sp.page ?? ""} className="field">
               <option value="">ທຸກເພຈ</option>
               {pages.map((p) => (
@@ -189,6 +253,11 @@ export default async function InboxPage({
             <button type="submit" className="btn btn-sm">
               ກັ່ນຕອງ
             </button>
+            {sp.q || sp.page || sp.days ? (
+              <Link href={href({}, { tab: sp.tab })} className="btn btn-sm">
+                ລ້າງ
+              </Link>
+            ) : null}
           </form>
         </div>
       </Card>
@@ -203,6 +272,31 @@ export default async function InboxPage({
           </Card>
         ) : (
           <div className="grid gap-3">
+            {/* ຟອມຫວ່າງໆ ໄວ້ໃຫ້ checkbox ໃນແຕ່ລະກາດອ້າງເຖິງດ້ວຍ form="bulk"
+                — HTML ຫ້າມຟອມຊ້ອນຟອມ ຈຶ່ງບໍ່ຄຸມທັງລາຍການໄວ້ */}
+            <form action={markSelectedHandled} id="bulk" />
+
+            <Card className="flex flex-wrap items-center gap-3 p-3">
+              <p className="text-sm text-[var(--fg-muted)]">
+                ສະແດງ {comments.length} ຈາກ {matching} ອັນ
+              </p>
+              <button
+                type="submit"
+                form="bulk"
+                className="btn btn-sm ml-auto"
+              >
+                ໝາຍທີ່ເລືອກວ່າຈັດການແລ້ວ
+              </button>
+              {matching > comments.length ? (
+                <Link
+                  href={href(sp, { show: String(comments.length + PAGE_SIZE) })}
+                  className="btn btn-sm"
+                >
+                  ໂຫຼດເພີ່ມ {Math.min(PAGE_SIZE, matching - comments.length)} ອັນ
+                </Link>
+              ) : null}
+            </Card>
+
             {comments.map((comment) => {
               const reply = replyComment.bind(null, comment.id);
               const handle = setCommentHandled.bind(
@@ -220,6 +314,16 @@ export default async function InboxPage({
               return (
                 <Card key={comment.id} className="p-4">
                   <div className="flex flex-wrap items-baseline gap-2">
+                    {comment.handled ? null : (
+                      <input
+                        type="checkbox"
+                        name="ids"
+                        value={comment.id}
+                        form="bulk"
+                        aria-label={`ເລືອກ comment ຂອງ ${comment.fromName ?? "ບໍ່ຮູ້ຊື່"}`}
+                        className="h-4 w-4 self-center"
+                      />
+                    )}
                     <p className="text-sm font-semibold">
                       {comment.fromName ?? "ບໍ່ຮູ້ຊື່"}
                     </p>
@@ -264,17 +368,11 @@ export default async function InboxPage({
                     ) : null}
                   </p>
 
-                  <form action={reply} className="mt-3 flex flex-wrap gap-2">
-                    <input
-                      name="message"
-                      required
-                      className="field min-w-0 flex-1"
-                      placeholder="ພິມຄຳຕອບ ແລ້ວກົດ ຕອບ..."
-                    />
-                    <SubmitButton className="btn btn-primary" pendingText="ກຳລັງສົ່ງ...">
-                      ຕອບ
-                    </SubmitButton>
-                  </form>
+                  <ReplyBox
+                    action={reply}
+                    canned={canned}
+                    canPrivateReply={!comment.fromPage}
+                  />
 
                   <div className="mt-2 flex flex-wrap gap-2">
                     <form action={handle}>

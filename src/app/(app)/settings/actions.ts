@@ -15,6 +15,7 @@ import {
   type FbAssetPage,
 } from "@/lib/fb";
 import { DEFAULT_THRESHOLDS, THRESHOLD_KEYS } from "@/lib/alerts";
+import { saveCannedReplies } from "@/lib/canned";
 import {
   AUTO_INBOX_INTERVALS,
   AUTO_INBOX_KEYS,
@@ -171,6 +172,14 @@ export async function saveAutoSync(fd: FormData) {
   revalidatePath("/settings");
 }
 
+
+/** ບັນທຶກຄຳຕອບສຳເລັດຮູບ (ແຖວລະ 1 ຄຳຕອບ) */
+export async function saveCanned(fd: FormData) {
+  await requireSession();
+  await saveCannedReplies(fd.get("cannedReplies")?.toString() ?? "");
+  revalidatePath("/settings");
+  revalidatePath("/inbox");
+}
 
 /** ເປີດ/ປິດການດຶງ comment ແລະ ແຊັດ ອັດຕະໂນມັດ */
 export async function saveAutoInbox(fd: FormData) {

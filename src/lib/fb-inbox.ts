@@ -693,6 +693,51 @@ export async function replyToComment(commentId: string, message: string) {
   });
 }
 
+/**
+ * ຕອບ comment ເປັນ **ຂໍ້ຄວາມສ່ວນຕົວ** (private reply) — Facebook ຈະເປີດ
+ * ຫ້ອງແຊັດ Messenger ກັບຄົນທີ່ comment ນັ້ນໃຫ້ເລີຍ.
+ *
+ * ນີ້ຄືວິທີປ່ຽນ comment ເປັນລູກຄ້າທີ່ໄດ້ຜົນທີ່ສຸດສຳລັບໂຄສະນາແບບ “ທັກແຊັດ”.
+ * ຂໍ້ຈຳກັດຂອງ Facebook: ສົ່ງໄດ້ **1 ເທື່ອຕໍ່ 1 comment** ແລະ ພາຍໃນ **7 ວັນ**
+ * ນັບຈາກເວລາທີ່ comment ນັ້ນຖືກຂຽນ.
+ *
+ * ຫ້ອງແຊັດໃໝ່ຈະປາກົດໃນລະບົບຮອບດຶງຕໍ່ໄປ (ບໍ່ໄດ້ສ້າງເອງບ່ອນນີ້
+ * ເພາະຍັງບໍ່ຮູ້ id ຂອງຫ້ອງທີ່ Facebook ສ້າງ).
+ */
+export async function sendPrivateReply(commentId: string, message: string) {
+  const comment = await prisma.fbComment.findUnique({ where: { id: commentId } });
+  if (!comment) throw new Error("ບໍ່ພົບ comment ນີ້ແລ້ວ");
+  if (comment.fromPage) {
+    throw new Error("ອັນນີ້ເປັນຄຳຕອບຂອງເພຈເອງ — ສົ່ງຂໍ້ຄວາມສ່ວນຕົວບໍ່ໄດ້");
+  }
+
+  const config = await getFbConfig();
+  if (!config) throw new Error("ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token");
+  const page = await pageToken(comment.pageId);
+
+  await graphPost(
+    config.apiVersion,
+    `${comment.fbCommentId}/private_replies`,
+    { message },
+    page.token!,
+  );
+
+  await prisma.fbComment.update({
+    where: { id: comment.id },
+    data: { handled: true, handledAt: new Date() },
+  });
+}
+
+/** ໝາຍຫຼາຍ comment ວ່າຈັດການແລ້ວ/ຍັງ ໃນເທື່ອດຽວ */
+export async function markCommentsHandled(ids: string[], handled: boolean) {
+  if (ids.length === 0) return 0;
+  const result = await prisma.fbComment.updateMany({
+    where: { id: { in: ids } },
+    data: { handled, handledAt: handled ? new Date() : null },
+  });
+  return result.count;
+}
+
 /** ເຊື່ອງ / ເອົາອອກຈາກທີ່ເຊື່ອງ — ໃຊ້ກັບ comment ກວນ */
 export async function setCommentHidden(commentId: string, hidden: boolean) {
   const comment = await prisma.fbComment.findUnique({ where: { id: commentId } });

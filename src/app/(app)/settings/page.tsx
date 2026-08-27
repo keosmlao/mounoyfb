@@ -5,6 +5,7 @@ import {
   runFacebookSync,
   saveAlertThresholds,
   saveAutoInbox,
+  saveCanned,
   saveAutoSync,
   saveExchangeRate,
   saveSettings,
@@ -18,6 +19,7 @@ import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
 import { DISPLAY_CURRENCIES, DISPLAY_CURRENCY_LABEL } from "@/lib/money";
 import { activeSyncLog } from "@/lib/fb";
+import { getCannedReplies } from "@/lib/canned";
 import {
   AUTO_INBOX_INTERVALS,
   AUTO_SYNC_DAY_CHOICES,
@@ -45,7 +47,7 @@ export default async function SettingsPage() {
   // ກວດວຽກທີ່ຄ້າງກ່ອນ ຈຶ່ງອ່ານປະຫວັດ — ວຽກທີ່ຕາຍໄປແລ້ວຈະຖືກປິດເປັນ "ຜິດພາດ"
   const running = await activeSyncLog();
 
-  const [settings, rates, logs, accountsWithId, thresholds, auto, inbox] =
+  const [settings, rates, logs, accountsWithId, thresholds, auto, inbox, canned] =
     await Promise.all([
       prisma.appSetting.findMany(),
       prisma.exchangeRate.findMany({ orderBy: { date: "desc" }, take: 15 }),
@@ -54,6 +56,7 @@ export default async function SettingsPage() {
       getThresholds(),
       autoSyncStatus(),
       inboxState(),
+      getCannedReplies(),
     ]);
 
   const map = new Map(settings.map((s) => [s.key, s.value]));
@@ -374,6 +377,23 @@ export default async function SettingsPage() {
                   ຮອບຫຼ້າສຸດມີບັນຫາ: {inbox.error}
                 </p>
               ) : null}
+            </form>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="ຄຳຕອບສຳເລັດຮູບ"
+              subtitle="ຂຶ້ນເປັນປຸ່ມກົດຢູ່ກ່ອງຕອບ comment — ແຖວລະ 1 ຄຳຕອບ, ສູງສຸດ 12 ແຖວ"
+            />
+            <form action={saveCanned} className="grid gap-4 p-4">
+              <textarea
+                name="cannedReplies"
+                rows={6}
+                defaultValue={canned.join("\n")}
+                className="field font-mono text-sm"
+                placeholder={"ລາຄາ 29,000 ກີບ ຈ້າ\nສົ່ງທົ່ວປະເທດ ເກັບເງິນປາຍທາງໄດ້"}
+              />
+              <SubmitButton>ບັນທຶກຄຳຕອບ</SubmitButton>
             </form>
           </Card>
 

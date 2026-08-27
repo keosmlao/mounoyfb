@@ -3,14 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
-import { reqStr } from "@/lib/form";
+import { reqStr, str } from "@/lib/form";
 import { runInboxSync } from "@/lib/auto-sync";
 import {
+  markCommentsHandled,
   replyToComment,
   sendChatMessage,
+  sendPrivateReply,
   setCommentHidden,
   syncPageTokens,
 } from "@/lib/fb-inbox";
+import { explainFbError } from "@/lib/fb";
 import { todayStr, parseDate } from "@/lib/date";
 
 /** ດຶງກ່ອງຂໍ້ຄວາມດຽວນີ້ — ລໍຈົນຈົບ ເພາະ 1 ຮອບໃຊ້ເວລາບໍ່ດົນ */
@@ -29,9 +32,35 @@ export async function linkPages() {
   revalidatePath("/inbox");
 }
 
-export async function replyComment(commentId: string, fd: FormData) {
+/**
+ * ຕອບ comment — `mode=private` ຄືຕອບເຂົ້າ Messenger ຂອງຄົນນັ້ນ (private reply).
+ * ຄືນຂໍ້ຄວາມຜິດພາດແທນການ throw ເພື່ອໃຫ້ກ່ອງຕອບສະແດງເອງ ໂດຍໜ້າບໍ່ພັງ.
+ */
+export async function replyComment(
+  commentId: string,
+  _prev: string | null,
+  fd: FormData,
+): Promise<string | null> {
   await requireSession();
-  await replyToComment(commentId, reqStr(fd, "message", "ຄຳຕອບ"));
+  try {
+    const message = reqStr(fd, "message", "ຄຳຕອບ");
+    if (str(fd, "mode") === "private") {
+      await sendPrivateReply(commentId, message);
+    } else {
+      await replyToComment(commentId, message);
+    }
+    revalidatePath("/inbox");
+    return null;
+  } catch (error) {
+    return explainFbError(error);
+  }
+}
+
+/** ໝາຍທີ່ຕິກໄວ້ວ່າຈັດການແລ້ວ — ໃຊ້ເກັບກວາດ comment ທີ່ຄ້າງເປັນຮ້ອຍ */
+export async function markSelectedHandled(fd: FormData) {
+  await requireSession();
+  const ids = fd.getAll("ids").filter((v): v is string => typeof v === "string");
+  await markCommentsHandled(ids, true);
   revalidatePath("/inbox");
 }
 

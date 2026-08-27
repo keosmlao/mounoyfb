@@ -70,7 +70,15 @@ export default async function CampaignDetailPage({
   });
   if (!campaign) notFound();
 
-  const [rows, prevRows, adSetTotals, orderRows, prevOrderRows] = await Promise.all([
+  const [
+    rows,
+    prevRows,
+    adSetTotals,
+    orderRows,
+    prevOrderRows,
+    commentCount,
+    openCommentCount,
+  ] = await Promise.all([
     prisma.insight.findMany({
       where: {
         ...totalsScope,
@@ -125,6 +133,17 @@ export default async function CampaignDetailPage({
         otherCost: true,
         refundAmount: true,
       },
+    }),
+    // comment ຈາກໂພສທີ່ຍິງພາຍໃຕ້ແຄມເປນນີ້ (ບໍ່ນັບຄຳຕອບຂອງເພຈເອງ)
+    prisma.fbComment.count({
+      where: {
+        fromPage: false,
+        post: { campaignId: id },
+        commentedAt: { gte: parseDate(range.from), lte: parseDate(range.to) },
+      },
+    }),
+    prisma.fbComment.count({
+      where: { fromPage: false, handled: false, post: { campaignId: id } },
     }),
   ]);
 
@@ -222,6 +241,17 @@ export default async function CampaignDetailPage({
           current={total.costPerMessage}
           previous={prevTotal.costPerMessage}
           upIsGood={false}
+        />
+        <StatTile
+          label="comment ທີ່ໄດ້"
+          value={formatCompact(commentCount)}
+          hint={
+            commentCount
+              ? `ຄ່າຕໍ່ 1 comment ${money(total.spendLak / commentCount)}${
+                  openCommentCount ? ` · ຄ້າງຕອບ ${openCommentCount}` : ""
+                }`
+              : "ຍັງບໍ່ມີ comment (ຫຼື ຍັງບໍ່ໄດ້ດຶງກ່ອງຂໍ້ຄວາມ)"
+          }
         />
         <StatTile
           label="Order ສົ່ງສຳເລັດ"

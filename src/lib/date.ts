@@ -177,3 +177,8 @@ export function formatAgo(value: Date, now: Date = new Date()): string {
   if (days <= 7) return `${days} ວັນກ່ອນ`;
   return formatTimeLao(value);
 }
+
+/** ວັນທີ່ຍ້ອນຫຼັງ N ວັນຈາກດຽວນີ້ (ນັບເປັນເວລາຈິງ ບໍ່ແມ່ນ @db.Date) */
+export function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
