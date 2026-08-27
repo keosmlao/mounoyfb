@@ -38,13 +38,18 @@ export default async function CampaignsPage({
   const sp = await searchParams;
   const range = resolveRange(sp);
 
+  // ຄ່າຕັ້ງຕົ້ນເຊື່ອງອັນທີ່ເກັບເຂົ້າຄັງ — ສ່ວນຫຼາຍແມ່ນອັນທີ່ຖືກລຶບຢູ່ Facebook ແລ້ວ
+  // (ຍັງເກັບຂໍ້ມູນໄວ້ ເພື່ອບໍ່ໃຫ້ຄ່າໂຄສະນາໃນອະດີດຫາຍຈາກລາຍງານ).
+  // ເລືອກສະຖານະ "ເກັບເຂົ້າຄັງ" ໃນຕົວກັ່ນຕອງ ຈຶ່ງເຫັນຄືນ.
   const where = {
     ...(sp.account ? { adAccountId: sp.account } : {}),
-    ...(sp.status ? { status: sp.status as EntityStatus } : {}),
+    ...(sp.status
+      ? { status: sp.status as EntityStatus }
+      : { status: { not: "ARCHIVED" as EntityStatus } }),
     ...(sp.q ? { name: { contains: sp.q, mode: "insensitive" as const } } : {}),
   };
 
-  const [campaigns, accounts, grouped, orderRows] = await Promise.all([
+  const [campaigns, accounts, grouped, orderRows, archivedCount] = await Promise.all([
     prisma.campaign.findMany({
       where,
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
@@ -89,6 +94,12 @@ export default async function CampaignsPage({
         shippingCost: true,
         otherCost: true,
         refundAmount: true,
+      },
+    }),
+    prisma.campaign.count({
+      where: {
+        status: "ARCHIVED",
+        ...(sp.account ? { adAccountId: sp.account } : {}),
       },
     }),
   ]);
@@ -165,7 +176,7 @@ export default async function CampaignsPage({
           <div>
             <label className="label">ສະຖານະ</label>
             <select name="status" defaultValue={sp.status ?? ""} className="field">
-              <option value="">ທັງໝົດ</option>
+              <option value="">ທີ່ຍັງໃຊ້ຢູ່ (ບໍ່ລວມຄັງ)</option>
               {options(STATUS_LABEL).map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
@@ -187,7 +198,23 @@ export default async function CampaignsPage({
       <Card>
         <CardHeader
           title="ລາຍການແຄມເປນ"
-          subtitle={`ພົບ ${campaigns.length} ແຄມເປນ`}
+          subtitle={
+            <>
+              ພົບ {campaigns.length} ແຄມເປນ
+              {!sp.status && archivedCount > 0 ? (
+                <>
+                  {" · ເຊື່ອງ "}
+                  {archivedCount} ອັນທີ່ເກັບເຂົ້າຄັງ (ຖືກລຶບ/ຢຸດຢູ່ Facebook){" "}
+                  <Link
+                    href={`/campaigns?status=ARCHIVED${sp.account ? `&account=${sp.account}` : ""}`}
+                    className="link"
+                  >
+                    ເບິ່ງ
+                  </Link>
+                </>
+              ) : null}
+            </>
+          }
         />
         {campaigns.length === 0 ? (
           <EmptyState
