@@ -4,9 +4,9 @@ import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui
 import { DateRangeBar } from "@/components/DateRangeBar";
 import { RunToggle } from "@/components/RunToggle";
 import { toggleCampaignStatusSafe } from "./actions";
-import { parseDate, resolveRange } from "@/lib/date";
+import { formatDateLao, parseDate, resolveRange, todayStr } from "@/lib/date";
 import { derive, EMPTY_TOTALS, type Totals } from "@/lib/metrics";
-import { formatCompact, formatPercent } from "@/lib/format";
+import { formatCompact, formatMoney, formatPercent } from "@/lib/format";
 import {
   OBJECTIVE_LABEL,
   STATUS_LABEL,
@@ -29,6 +29,42 @@ type Search = {
   q?: string;
 };
 
+
+/** "27/08" — ສັ້ນພໍໃສ່ໃນຕາຕະລາງ, ວັນເຕັມຢູ່ໃນ tooltip */
+function shortDate(d: Date): string {
+  const s = d.toISOString().slice(0, 10);
+  return `${s.slice(8, 10)}/${s.slice(5, 7)}`;
+}
+
+/**
+ * ຊ່ວງທີ່ແຄມເປນຖືກຕັ້ງໃຫ້ຍິງ — **ຄົນລະຢ່າງກັບຊ່ວງວັນທີ່ເລືອກເບິ່ງຢູ່ຂ້າງເທິງ**.
+ * ຊ່ວງເບິ່ງຄຸມຕົວເລກໃນຕາຕະລາງ ສ່ວນອັນນີ້ບອກວ່າແຄມເປນເອງແລ່ນແຕ່ໃສຫາໃສ.
+ */
+function schedule(
+  start: Date | null,
+  end: Date | null,
+  today: string,
+): { text: string; note: string | null; tone: "danger" | "warning" | "muted" } {
+  if (!start && !end) return { text: "ບໍ່ກຳນົດ", note: null, tone: "muted" };
+
+  const text = `${start ? shortDate(start) : "—"} → ${end ? shortDate(end) : "ບໍ່ກຳນົດ"}`;
+  if (!end) return { text, note: null, tone: "muted" };
+
+  const endStr = end.toISOString().slice(0, 10);
+  if (endStr < today) return { text, note: "ຈົບແລ້ວ", tone: "muted" };
+
+  const daysLeft = Math.round(
+    (Date.parse(`${endStr}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000,
+  );
+  if (daysLeft <= 3) {
+    return { text, note: `ເຫຼືອ ${daysLeft} ວັນ`, tone: "danger" };
+  }
+  if (daysLeft <= 7) {
+    return { text, note: `ເຫຼືອ ${daysLeft} ວັນ`, tone: "warning" };
+  }
+  return { text, note: `ເຫຼືອ ${daysLeft} ວັນ`, tone: "muted" };
+}
+
 export default async function CampaignsPage({
   searchParams,
 }: {
@@ -37,6 +73,7 @@ export default async function CampaignsPage({
   const { money } = await loadMoney();
   const sp = await searchParams;
   const range = resolveRange(sp);
+  const today = todayStr();
 
   // ຄ່າຕັ້ງຕົ້ນເຊື່ອງອັນທີ່ເກັບເຂົ້າຄັງ — ສ່ວນຫຼາຍແມ່ນອັນທີ່ຖືກລຶບຢູ່ Facebook ແລ້ວ
   // (ຍັງເກັບຂໍ້ມູນໄວ້ ເພື່ອບໍ່ໃຫ້ຄ່າໂຄສະນາໃນອະດີດຫາຍຈາກລາຍງານ).
@@ -200,7 +237,8 @@ export default async function CampaignsPage({
           title="ລາຍການແຄມເປນ"
           subtitle={
             <>
-              ພົບ {campaigns.length} ແຄມເປນ
+              ຕົວເລກທັງໝົດຄິດຈາກ {formatDateLao(range.from)} ຫາ{" "}
+              {formatDateLao(range.to)} · ພົບ {campaigns.length} ແຄມເປນ
               {!sp.status && archivedCount > 0 ? (
                 <>
                   {" · ເຊື່ອງ "}
@@ -234,6 +272,8 @@ export default async function CampaignsPage({
                   <th>ແຄມເປນ</th>
                   <th>ເປົ້າໝາຍ</th>
                   <th>ສະຖານະ</th>
+                  <th>ຊ່ວງທີ່ຍິງ</th>
+                  <th className="num">ງົບ</th>
                   <th className="num">ຄ່າໂຄສະນາ</th>
                   <th className="num">ເຫັນ</th>
                   <th className="num">ຄລິກ</th>
@@ -243,6 +283,7 @@ export default async function CampaignsPage({
                   <th className="num">Meta Purchase</th>
                   <th className="num">ສົ່ງສຳເລັດ</th>
                   <th className="num">ຍອດຂາຍຈິງ</th>
+                  <th className="num">ກຳໄລຈິງ</th>
                   <th className="num">Actual ROAS</th>
                   <th />
                 </tr>
@@ -257,6 +298,8 @@ export default async function CampaignsPage({
                   // ຢຸດ/ຍິງຕໍ່ ໄດ້ສະເພາະ 2 ສະຖານະນີ້ — ອັນອື່ນ (ຮ່າງ/ຈົບ/ຄັງ) ບໍ່ມີຄວາມໝາຍ
                   const runnable =
                     c.status === "ACTIVE" || c.status === "PAUSED";
+                  const when = schedule(c.startDate, c.endDate, today);
+                  const currency = c.adAccount.currency;
                   const toggle = toggleCampaignStatusSafe.bind(
                     null,
                     c.id,
@@ -280,20 +323,81 @@ export default async function CampaignsPage({
                           {STATUS_LABEL[c.status]}
                         </Badge>
                       </td>
+                      <td
+                        className="whitespace-nowrap text-xs"
+                        title={
+                          c.startDate || c.endDate
+                            ? `${c.startDate ? formatDateLao(c.startDate) : "ບໍ່ກຳນົດ"} — ${c.endDate ? formatDateLao(c.endDate) : "ບໍ່ກຳນົດ"}`
+                            : "ບໍ່ໄດ້ຕັ້ງວັນເລີ່ມ/ສິ້ນສຸດ"
+                        }
+                      >
+                        <div>{when.text}</div>
+                        {when.note ? (
+                          <div
+                            className={
+                              when.tone === "danger"
+                                ? "text-[var(--danger)]"
+                                : when.tone === "warning"
+                                  ? "text-[var(--warning)]"
+                                  : "text-[var(--fg-subtle)]"
+                            }
+                          >
+                            {when.note}
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="num whitespace-nowrap text-xs">
+                        {c.dailyBudget ? (
+                          <>
+                            <div>{formatMoney(c.dailyBudget, currency)}</div>
+                            <div className="text-[var(--fg-subtle)]">ຕໍ່ວັນ</div>
+                          </>
+                        ) : c.lifetimeBudget ? (
+                          <>
+                            <div>{formatMoney(c.lifetimeBudget, currency)}</div>
+                            <div className="text-[var(--fg-subtle)]">ລວມ</div>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="num">{money(d.spendLak)}</td>
                       <td className="num">{formatCompact(d.impressions)}</td>
                       <td className="num">{formatCompact(d.clicks)}</td>
                       <td className="num">{formatPercent(d.ctr)}</td>
-                      <td className="num">{formatCompact(d.messages)}</td>
+                      <td className="num">
+                        {formatCompact(d.messages)}
+                        {d.messages && economics?.delivered ? (
+                          <div className="text-[0.68rem] font-normal text-[var(--fg-subtle)]">
+                            ປິດ {formatPercent(economics.delivered / d.messages)}
+                          </div>
+                        ) : null}
+                      </td>
                       <td className="num">
                         {d.messages ? money(d.costPerMessage) : "—"}
                       </td>
                       <td className="num">{formatCompact(d.purchases)}</td>
                       <td className="num">
                         {economics ? formatCompact(economics.delivered) : "—"}
+                        {economics?.delivered ? (
+                          <div className="text-[0.68rem] font-normal text-[var(--fg-subtle)]">
+                            {money(economics.costPerDeliveredOrder)}/ອັນ
+                          </div>
+                        ) : null}
                       </td>
                       <td className="num">
                         {economics ? money(economics.netRevenue) : "—"}
+                      </td>
+                      <td
+                        className={`num ${
+                          !economics
+                            ? ""
+                            : economics.contributionProfit >= 0
+                              ? "text-[var(--success)]"
+                              : "text-[var(--danger)]"
+                        }`}
+                      >
+                        {economics ? money(economics.contributionProfit) : "—"}
                       </td>
                       <td className="num">
                         <span
