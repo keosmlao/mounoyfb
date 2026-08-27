@@ -83,3 +83,36 @@ export function normalizeHeader(value: string): string {
     .replace(/[\s_\-.]/g, "")
     .trim();
 }
+
+// ------------------------------------------------------------------ ຂຽນ CSV
+
+/** ຫຸ້ມຄ່າດຽວໃຫ້ປອດໄພ — ຄ່າທີ່ມີຈຸດຄັ່ນ, ຄຳເວົ້າ ຫຼື ຂຶ້ນແຖວ ຕ້ອງໃສ່ວົງເລັບ */
+export function csvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/**
+ * ສ້າງໄຟລ໌ CSV ທັງກ້ອນ.
+ *
+ * ຂຶ້ນຕົ້ນດ້ວຍ **BOM** ສະເໝີ — ຖ້າບໍ່ມີ Excel ຢູ່ Windows ຈະອ່ານ UTF-8
+ * ເປັນ ANSI ແລ້ວຊື່ພາສາລາວກາຍເປັນຕົວອັກສອນຂີ້ເຫຍື້ອທັງໄຟລ໌.
+ */
+export function toCsv(
+  headers: string[],
+  rows: (string | number | null | undefined)[][],
+): string {
+  const lines = [headers.map(csvCell).join(",")];
+  for (const row of rows) lines.push(row.map(csvCell).join(","));
+  return `\ufeff${lines.join("\n")}\n`;
+}
+
+/** ຫົວຕອບມາດຕະຖານຂອງໄຟລ໌ CSV ທີ່ໃຫ້ໂຫຼດລົງເຄື່ອງ */
+export function csvHeaders(filename: string): HeadersInit {
+  return {
+    "Content-Type": "text/csv; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${filename}"`,
+    "Cache-Control": "no-store",
+  };
+}

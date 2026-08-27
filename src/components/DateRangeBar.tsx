@@ -35,8 +35,8 @@ export function DateRangeBar({
   };
 
   return (
-    <div className="date-range-bar card mb-6 flex flex-wrap items-center gap-3 p-2.5">
-      <div className="date-presets flex flex-wrap gap-1 rounded-xl bg-[var(--surface-2)] p-1">
+    <div className="date-range-bar card mb-2.5 flex flex-wrap items-center gap-2 p-1.5">
+      <div className="date-presets flex flex-wrap gap-0.5 rounded-md bg-[var(--surface-2)] p-0.5">
         {PRESETS.map((p) => (
           <Link
             key={p.key}
@@ -50,7 +50,7 @@ export function DateRangeBar({
         ))}
       </div>
 
-      <form method="get" action={basePath} className="flex flex-wrap items-end gap-2 lg:ml-1">
+      <form method="get" action={basePath} className="flex flex-wrap items-end gap-1.5 lg:ml-1">
         {keepEntries.map(([k, v]) => (
           <input key={k} type="hidden" name={k} value={v as string} />
         ))}
@@ -60,14 +60,14 @@ export function DateRangeBar({
             type="date"
             name="from"
             defaultValue={range.from}
-            className="field !py-1.5"
+            className="field !py-0.5"
           />
         </div>
         <div>
           <label className="label !text-[0.7rem]">ຫາວັນທີ່</label>
-          <input type="date" name="to" defaultValue={range.to} className="field !py-1.5" />
+          <input type="date" name="to" defaultValue={range.to} className="field !py-0.5" />
         </div>
-        <button type="submit" className="btn">
+        <button type="submit" className="btn btn-sm">
           ນຳໃຊ້
         </button>
       </form>

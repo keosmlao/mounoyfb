@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { configuredPassword } from "@/lib/auth";
+import { hasUsers } from "@/lib/auth-server";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,11 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const sp = await searchParams;
-  const ready = Boolean(configuredPassword() && process.env.SESSION_SECRET);
+  // ມີບັນຊີຜູ້ໃຊ້ແລ້ວ = ຖາມຊື່ນຳ · ຍັງບໍ່ມີ = ລະຫັດຜ່ານດຽວຮ່ວມກັນຄືເກົ່າ
+  const needsName = await hasUsers();
+  const ready = Boolean(
+    (needsName || configuredPassword()) && process.env.SESSION_SECRET,
+  );
 
   return (
     <div className="login-shell grid min-h-dvh lg:grid-cols-[1.15fr_0.85fr]">
@@ -63,12 +68,12 @@ export default async function LoginPage({
           <div className="card p-6 sm:p-8">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--brand)]">Secure workspace</p>
             <h2 className="mt-2 text-2xl font-bold tracking-[-0.035em]">ຍິນດີຕ້ອນຮັບ</h2>
-            <p className="mb-6 mt-2 text-sm text-[var(--fg-muted)]">
+            <p className="mb-4 mt-2 text-sm text-[var(--fg-muted)]">
               ໃສ່ລະຫັດຜ່ານຂອງທີມເພື່ອເຂົ້າໃຊ້ຂໍ້ມູນໂຄສະນາ
             </p>
 
           {ready ? (
-            <LoginForm next={sp.next ?? ""} />
+            <LoginForm needsName={needsName} next={sp.next ?? ""} />
           ) : (
             <p className="rounded-lg bg-[var(--warning-soft)] px-3 py-2.5 text-xs leading-relaxed text-[var(--warning)]">
               ຍັງບໍ່ໄດ້ຕັ້ງ <code>APP_PASSWORD</code> ຫຼື{" "}

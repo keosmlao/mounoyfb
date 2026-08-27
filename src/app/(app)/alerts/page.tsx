@@ -30,7 +30,7 @@ export default async function AlertsPage() {
           />
         </Card>
       ) : (
-        <div className="grid gap-5">
+        <div className="grid gap-3">
           {GROUPS.map((severity) => {
             const group = alerts.filter((a) => a.severity === severity);
             if (group.length === 0) return null;

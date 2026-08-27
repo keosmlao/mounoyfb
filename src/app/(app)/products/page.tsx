@@ -22,7 +22,7 @@ export default async function ProductsPage() {
         description="ຜູກກັບແຄມເປນ ເພື່ອຄິດກຳໄລ ແລະ ROAS ໄດ້ຖືກຕ້ອງ"
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardHeader
             title="ລາຍການສິນຄ້າ"
@@ -81,7 +81,7 @@ export default async function ProductsPage() {
 
         <Card className="h-fit">
           <CardHeader title="ເພີ່ມສິນຄ້າໃໝ່" />
-          <form action={createProduct} className="grid gap-4 p-4">
+          <form action={createProduct} className="grid gap-3 p-3">
             <Field label="ຊື່ສິນຄ້າ *">
               <input name="name" required className="field" />
             </Field>

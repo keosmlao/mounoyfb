@@ -34,10 +34,10 @@ export default async function EditProductPage({
         }
       />
 
-      <div className="grid max-w-2xl gap-5">
+      <div className="grid max-w-2xl gap-3">
         <Card>
           <CardHeader title="ຂໍ້ມູນສິນຄ້າ" />
-          <form action={update} className="grid gap-4 p-4 sm:grid-cols-2">
+          <form action={update} className="grid gap-3 p-3 sm:grid-cols-2">
             <Field label="ຊື່ສິນຄ້າ *" className="sm:col-span-2">
               <input
                 name="name"

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveRange } from "@/lib/date";
 import { buildReport, GROUP_BYS, type GroupBy } from "@/lib/report";
 import { isAuthenticated } from "@/lib/auth-server";
+import { csvCell } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,6 @@ const COLUMNS = [
   "Actual ROAS",
   "ອັດຕາຕີກັບ(%)",
 ];
-
-function csvCell(value: string | number): string {
-  const s = String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
 
 export async function GET(request: Request) {
   if (!(await isAuthenticated())) {

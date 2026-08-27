@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { enumVal, int0, num, reqDate, str } from "@/lib/form";
 import { OrderStatus } from "@/generated/prisma/enums";
 
@@ -151,7 +152,8 @@ export async function setOrderStatus(id: string, fd: FormData) {
 
 export async function deleteOrder(id: string) {
   await requireSession();
-  await prisma.order.delete({ where: { id } });
+  const removed = await prisma.order.delete({ where: { id } });
+  await recordAudit("order.delete", removed.customerName);
   revalidateOrderViews();
   redirect("/orders");
 }

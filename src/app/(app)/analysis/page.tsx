@@ -220,7 +220,7 @@ export default async function AnalysisPage({
         keep={keep}
       />
 
-      <div className="mt-5 grid gap-5">
+      <div className="mt-5 grid gap-3">
         {summary(advice).length > 0 ? (
           <Card>
             <CardHeader

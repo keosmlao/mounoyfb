@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -14,11 +15,15 @@ import { getThresholds } from "@/lib/alerts";
 import { FbTokenGuide } from "@/components/FbTokenGuide";
 import { FbConnection } from "@/components/FbConnection";
 import { SyncProgress } from "@/components/SyncProgress";
+import { TokenStatus } from "@/components/TokenStatus";
+import { UserAdmin } from "@/components/UserAdmin";
+import { currentUser } from "@/lib/auth-server";
+import { AUDIT_LABEL, isDestructive } from "@/lib/audit";
 import { addDays, formatDateLao, formatTimeLao, todayStr } from "@/lib/date";
 import { formatInt } from "@/lib/format";
 import { CURRENCIES } from "@/lib/labels";
 import { DISPLAY_CURRENCIES, DISPLAY_CURRENCY_LABEL } from "@/lib/money";
-import { activeSyncLog } from "@/lib/fb";
+import { activeSyncLog, readTokenState } from "@/lib/fb";
 import { getCannedReplies } from "@/lib/canned";
 import {
   AUTO_INBOX_INTERVALS,
@@ -47,20 +52,51 @@ export default async function SettingsPage() {
   // ກວດວຽກທີ່ຄ້າງກ່ອນ ຈຶ່ງອ່ານປະຫວັດ — ວຽກທີ່ຕາຍໄປແລ້ວຈະຖືກປິດເປັນ "ຜິດພາດ"
   const running = await activeSyncLog();
 
-  const [settings, rates, logs, accountsWithId, thresholds, auto, inbox, canned] =
-    await Promise.all([
-      prisma.appSetting.findMany(),
-      prisma.exchangeRate.findMany({ orderBy: { date: "desc" }, take: 15 }),
-      prisma.syncLog.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
-      prisma.adAccount.count({ where: { fbAccountId: { not: null } } }),
-      getThresholds(),
-      autoSyncStatus(),
-      inboxState(),
-      getCannedReplies(),
-    ]);
+  const [
+    settings,
+    rates,
+    logs,
+    accountsWithId,
+    thresholds,
+    auto,
+    inbox,
+    canned,
+    tokenState,
+    users,
+    auditLogs,
+    me,
+  ] = await Promise.all([
+    prisma.appSetting.findMany(),
+    prisma.exchangeRate.findMany({ orderBy: { date: "desc" }, take: 15 }),
+    prisma.syncLog.findMany({ orderBy: { startedAt: "desc" }, take: 10 }),
+    prisma.adAccount.count({ where: { fbAccountId: { not: null } } }),
+    getThresholds(),
+    autoSyncStatus(),
+    inboxState(),
+    getCannedReplies(),
+    readTokenState(),
+    prisma.user.findMany({
+      orderBy: [{ active: "desc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        role: true,
+        active: true,
+        lastLoginAt: true,
+      },
+    }),
+    prisma.auditLog.findMany({ orderBy: { at: "desc" }, take: 40 }),
+    currentUser(),
+  ]);
 
   const map = new Map(settings.map((s) => [s.key, s.value]));
   const hasToken = Boolean(map.get("fbAccessToken") || process.env.FB_ACCESS_TOKEN);
+  const hasAppSecret = Boolean(map.get("fbAppSecret"));
+  // ບອກທີ່ຢູ່ webhook ໃຫ້ຄັດລອກໄປໃສ່ Facebook — ອ່ານ host ຈາກ request ຈິງ
+  // ຈຶ່ງຖືກຕ້ອງທັງຕອນທົດລອງໃນເຄື່ອງ ແລະ ຕອນຂຶ້ນເຊີບເວີ
+  const head = await headers();
+  const webhookOrigin = `https://${head.get("host") ?? "ໂດເມນຂອງທ່ານ"}`;
 
   return (
     <>
@@ -69,10 +105,10 @@ export default async function SettingsPage() {
         description="ຄ່າທົ່ວໄປ, ອັດຕາແລກປ່ຽນ ແລະ ການເຊື່ອມຕໍ່ Facebook Marketing API"
       />
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         <Card className="h-fit">
           <CardHeader title="ຄ່າທົ່ວໄປ" />
-          <form action={saveSettings} className="grid gap-4 p-4">
+          <form action={saveSettings} className="grid gap-3 p-3">
             <Field
               label="ສະກຸນເງິນທີ່ສະແດງ"
               hint="ຂໍ້ມູນເກັບເປັນກີບສະເໝີ — ອັນນີ້ປ່ຽນແຕ່ການສະແດງຜົນ ສະຫຼັບກັບໄດ້ທຸກເມື່ອ"
@@ -146,13 +182,75 @@ export default async function SettingsPage() {
               </div>
             </div>
 
+            <div className="border-t border-[var(--border)] pt-3">
+              <p className="mb-2 text-sm font-medium">
+                Webhook — ໃຫ້ຂໍ້ຄວາມເຂົ້າມາທັນທີ
+              </p>
+              <p className="mb-2 text-xs text-[var(--fg-muted)]">
+                ບໍ່ຕັ້ງກໍ່ໃຊ້ໄດ້ — ລະບົບຈະດຶງຕາມເວລາຄືເກົ່າ. ຕັ້ງແລ້ວ comment
+                ແລະ ແຊັດຈະເຂົ້າມາພາຍໃນວິນາທີ ແທນທີ່ຈະລໍຮອບດຶງ.
+                <strong> ຕ້ອງມີ HTTPS</strong> — Facebook ບໍ່ຮ້ອງໃສ່ http.
+              </p>
+              <div className="grid gap-3">
+                <Field
+                  label="ທີ່ຢູ່ Webhook (ເອົາໄປໃສ່ໃນ Facebook)"
+                  hint="ໃສ່ຢູ່ App → Webhooks → Page → ຮັບ field “feed” ແລະ “messages”"
+                >
+                  <input
+                    readOnly
+                    value={`${webhookOrigin}/api/fb/webhook`}
+                    className="field font-mono text-xs"
+                  />
+                </Field>
+                <Field
+                  label="Verify Token"
+                  hint="ຕັ້ງເອງເປັນຄຳຫຍັງກໍ່ໄດ້ ແລ້ວໃສ່ຄຳດຽວກັນຢູ່ Facebook"
+                >
+                  <input
+                    name="fbWebhookVerifyToken"
+                    defaultValue={map.get("fbWebhookVerifyToken") ?? ""}
+                    className="field"
+                    placeholder="ເຊັ່ນ fbmonoy-2026"
+                  />
+                </Field>
+                <Field
+                  label="App Secret"
+                  hint={
+                    hasAppSecret
+                      ? "ມີເກັບໄວ້ແລ້ວ — ປະວ່າງໄວ້ຖ້າບໍ່ຕ້ອງການປ່ຽນ"
+                      : "ຢູ່ App → Settings → Basic — ໃຊ້ກວດວ່າຂໍ້ຄວາມມາຈາກ Facebook ຈິງ"
+                  }
+                >
+                  <input
+                    name="fbAppSecret"
+                    type="password"
+                    autoComplete="off"
+                    placeholder={hasAppSecret ? "••••••••••••" : ""}
+                    className="field"
+                  />
+                </Field>
+                {hasAppSecret ? (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      name="clearAppSecret"
+                      value="1"
+                      className="h-4 w-4"
+                    />
+                    ລຶບ app secret ອອກ (ປິດ webhook)
+                  </label>
+                ) : null}
+              </div>
+            </div>
+
             <SubmitButton>ບັນທຶກຄ່າ</SubmitButton>
           </form>
           <FbConnection hasToken={hasToken} />
+          {hasToken ? <TokenStatus state={tokenState} /> : null}
           <FbTokenGuide />
         </Card>
 
-        <div className="grid gap-5">
+        <div className="grid gap-3">
           <Card>
             <CardHeader
               title="ດຶງຂໍ້ມູນຈາກ Facebook"
@@ -173,7 +271,7 @@ export default async function SettingsPage() {
                 })}
               />
             ) : null}
-            <form action={runFacebookSync} className="grid gap-4 p-4 sm:grid-cols-2">
+            <form action={runFacebookSync} className="grid gap-3 p-3 sm:grid-cols-2">
               <input type="hidden" name="levelCampaign" value="1" />
               <Field label="ແຕ່ວັນທີ່">
                 <input
@@ -252,7 +350,7 @@ export default async function SettingsPage() {
 
             <form
               action={saveAutoSync}
-              className="grid gap-4 border-t border-[var(--border)] p-4 sm:grid-cols-2"
+              className="grid gap-3 border-t border-[var(--border)] p-3 sm:grid-cols-2"
             >
               <div className="sm:col-span-2">
                 <label className="flex items-center gap-2 text-sm font-medium">
@@ -333,7 +431,7 @@ export default async function SettingsPage() {
               title="ດຶງ comment ແລະ ແຊັດ"
               subtitle="ກ່ອງຂໍ້ຄວາມຂອງເພຈ — ຕ້ອງເຊື່ອມ page token ຢູ່ໜ້າ ເພຈ ກ່ອນ"
             />
-            <form action={saveAutoInbox} className="grid gap-4 p-4 sm:grid-cols-2">
+            <form action={saveAutoInbox} className="grid gap-3 p-3 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="flex items-center gap-2 text-sm font-medium">
                   <input
@@ -385,7 +483,7 @@ export default async function SettingsPage() {
               title="ຄຳຕອບສຳເລັດຮູບ"
               subtitle="ຂຶ້ນເປັນປຸ່ມກົດຢູ່ກ່ອງຕອບ comment — ແຖວລະ 1 ຄຳຕອບ, ສູງສຸດ 12 ແຖວ"
             />
-            <form action={saveCanned} className="grid gap-4 p-4">
+            <form action={saveCanned} className="grid gap-3 p-3">
               <textarea
                 name="cannedReplies"
                 rows={6}
@@ -449,7 +547,7 @@ export default async function SettingsPage() {
           />
           <form
             action={saveAlertThresholds}
-            className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3"
+            className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3"
           >
             <Field
               label="ຍອມໃຫ້ເກີນງົບຕໍ່ວັນ (%)"
@@ -518,13 +616,26 @@ export default async function SettingsPage() {
                 className="field"
               />
             </Field>
+            <Field
+              label="ຂໍ້ມູນຄ້າງເກີນ (ຊົ່ວໂມງ)"
+              hint="ບໍ່ມີການດຶງສຳເລັດດົນກວ່ານີ້ = ເຕືອນວ່າຕົວເລກທີ່ເຫັນບໍ່ແມ່ນຂອງຫຼ້າສຸດ"
+            >
+              <input
+                name="syncStaleHours"
+                type="number"
+                min="1"
+                step="1"
+                defaultValue={thresholds.syncStaleHours}
+                className="field"
+              />
+            </Field>
             <div className="sm:col-span-2 xl:col-span-3">
               <SubmitButton>ບັນທຶກເກນ</SubmitButton>
             </div>
           </form>
         </Card>
 
-        <Card className="xl:col-span-2">
+        <Card className="xl:col-span-2" id="fx">
           <CardHeader
             title="ອັດຕາແລກປ່ຽນລາຍວັນ"
             subtitle="ໃຊ້ແປງຄ່າໂຄສະນາເປັນກີບ — ບັນທຶກຕອນປ້ອນຜົນລາຍວັນກໍ່ໄດ້"
@@ -583,6 +694,56 @@ export default async function SettingsPage() {
                       <td>{formatDateLao(r.date)}</td>
                       <td>{r.currency}</td>
                       <td className="num">{formatInt(r.rateToLak)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+
+        <UserAdmin users={users} meId={me?.id ?? null} />
+
+        <Card className="xl:col-span-2" id="audit">
+          <CardHeader
+            title="ບັນທຶກການກະທຳ"
+            subtitle="40 ລາຍການລ່າສຸດ — ສະເພາະການລຶບ, ການສັ່ງໄປ Facebook ແລະ ການປ່ຽນຄ່າຕັ້ງສຳຄັນ"
+          />
+          {auditLogs.length === 0 ? (
+            <EmptyState
+              title="ຍັງບໍ່ມີບັນທຶກ"
+              hint="ຈະບັນທຶກເມື່ອມີການລຶບ ຫຼື ສັ່ງໄປ Facebook"
+            />
+          ) : (
+            <div className="table-wrap max-h-[28rem] overflow-y-auto">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>ເວລາ</th>
+                    <th>ໃຜ</th>
+                    <th>ເຮັດຫຍັງ</th>
+                    <th>ກັບອັນໃດ</th>
+                    <th>ລາຍລະອຽດ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="whitespace-nowrap text-xs">
+                        {formatTimeLao(log.at)}
+                      </td>
+                      <td className="text-xs">{log.userName}</td>
+                      <td>
+                        <Badge tone={isDestructive(log.action) ? "danger" : "neutral"}>
+                          {AUDIT_LABEL[log.action] ?? log.action}
+                        </Badge>
+                      </td>
+                      <td className="max-w-52 truncate text-xs">
+                        {log.target ?? "—"}
+                      </td>
+                      <td className="max-w-72 truncate text-xs text-[var(--fg-muted)]">
+                        {log.detail ?? "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

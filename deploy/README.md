@@ -187,10 +187,55 @@ sudo systemctl restart fbmonoy
 
 ## ສຳຮອງຖານຂໍ້ມູນ
 
+`install.sh` ຕັ້ງ cron ໃຫ້ແລ້ວ (`/etc/cron.daily/fbmonoy-backup`) — ສຳຮອງທຸກຄືນ
+ໄປໄວ້ `/var/backups/fbmonoy/YYYY-MM-DD.sql.gz` ແລະ ເກັບໄວ້ 14 ວັນ.
+
 ```bash
-# ໃສ່ໃນ crontab -e ໃຫ້ແລ່ນທຸກຄືນ ຕີ 2
+# ກວດວ່າມີໄຟລ໌ຈິງ ແລະ ໃໝ່ຢູ່
+ls -lh /var/backups/fbmonoy/ | tail -5
+```
+
+ຖ້າຕັ້ງເອງ ໃສ່ໃນ `crontab -e`:
+
+```bash
 0 2 * * * pg_dump -U fbmonoy fbmonoy | gzip > /var/backups/fbmonoy-$(date +\%F).sql.gz
 ```
+
+## ກູ້ຂໍ້ມູນຄືນ
+
+> 🔴 **ສຳຮອງທີ່ບໍ່ເຄີຍລອງກູ້ ຍັງບໍ່ນັບວ່າເປັນສຳຮອງ** — ລອງເທື່ອໜຶ່ງຕອນທີ່ຍັງບໍ່ຮ້ອນ
+
+ຄຳສັ່ງລຸ່ມນີ້ **ລຶບຂໍ້ມູນປັດຈຸບັນຖິ້ມທັງໝົດ** ແລ້ວເອົາຂອງມື້ນັ້ນມາໃສ່ແທນ.
+ອ່ານໃຫ້ຈົບກ່ອນວາງ.
+
+```bash
+# 1. ຢຸດແອັບກ່ອນ — ບໍ່ດັ່ງນັ້ນມັນຈະຂຽນທັບລະຫວ່າງກູ້
+sudo systemctl stop fbmonoy      # ຢູ່ ns1 ຊື່ບໍລິການແມ່ນ mounoyfb
+
+# 2. ສຳຮອງ "ຂອງດຽວນີ້" ໄວ້ກ່ອນ — ເຜື່ອກູ້ຜິດໄຟລ໌
+sudo -u postgres pg_dump fbmonoy | gzip > /var/backups/fbmonoy/ກ່ອນກູ້-$(date +%F-%H%M).sql.gz
+
+# 3. ເລືອກໄຟລ໌ທີ່ຈະກູ້ ແລ້ວກວດວ່າມີຕາຕະລາງຈິງ
+BACKUP=/var/backups/fbmonoy/2026-08-26.sql.gz
+gunzip -c "$BACKUP" | grep -c '^CREATE TABLE'    # ຕ້ອງໄດ້ຫຼາຍກວ່າ 0
+
+# 4. ສ້າງ schema ເປົ່າຂຶ້ນໃໝ່ ແລ້ວໃສ່ຂໍ້ມູນເກົ່າ
+sudo -u postgres psql -d fbmonoy -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+gunzip -c "$BACKUP" | sudo -u postgres psql -q -d fbmonoy
+sudo -u postgres psql -qd fbmonoy -c 'GRANT ALL ON ALL TABLES IN SCHEMA public TO fbmonoy;'
+sudo -u postgres psql -qd fbmonoy -c 'GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO fbmonoy;'
+
+# 5. ເປີດຄືນ ແລ້ວກວດ
+sudo systemctl start fbmonoy
+curl -s localhost:3000/api/health     # ຕ້ອງໄດ້ {"status":"ok",...}
+```
+
+**ຫຼັງກູ້ແລ້ວ:** ໄປໜ້າ ຕັ້ງຄ່າ ກວດວ່າ Facebook token ຍັງໃຊ້ໄດ້ (ໄຟລ໌ສຳຮອງ
+ມີ token ຂອງມື້ນັ້ນ ຊຶ່ງອາດຖືກປ່ຽນໄປແລ້ວ) ແລ້ວກົດ “ດຶງຂໍ້ມູນດຽວນີ້”
+ເພື່ອເອົາຜົນຂອງມື້ທີ່ຂາດຫາຍໄປລະຫວ່າງໄຟລ໌ສຳຮອງກັບປັດຈຸບັນ.
+
+ຖ້າ migration ຂອງໂຄດໃໝ່ກວ່າໄຟລ໌ສຳຮອງ ໃຫ້ແລ່ນ `npx prisma migrate deploy`
+ຢູ່ໂຟນເດີແອັບ ຫຼັງຂັ້ນ 4.
 
 ## ແກ້ບັນຫາ
 

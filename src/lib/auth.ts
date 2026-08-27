@@ -62,40 +62,68 @@ export function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** ສ້າງຄ່າ cookie ໃໝ່ທີ່ໝົດອາຍຸໃນ 7 ວັນ */
-export async function createSessionToken(): Promise<{
+/**
+ * ຄົນທີ່ login ຢູ່.
+ * `userId` ວ່າງ = session ແບບລະຫັດຜ່ານດຽວຮ່ວມກັນ (ຮ້ານທີ່ຍັງບໍ່ໄດ້ສ້າງຜູ້ໃຊ້)
+ */
+export type Session = { userId: string | null };
+
+/**
+ * ສ້າງຄ່າ cookie ໃໝ່ທີ່ໝົດອາຍຸໃນ 7 ວັນ.
+ * ຮູບແບບ `<userId>.<ໝົດອາຍຸ>.<ລາຍເຊັນ>` — userId ວ່າງໄດ້ (ລະຫັດຮ່ວມ).
+ */
+export async function createSessionToken(userId?: string | null): Promise<{
   value: string;
   maxAge: number;
 }> {
   const expires = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE_SECONDS;
-  const payload = String(expires);
+  const payload = `${userId ?? ""}.${expires}`;
   return {
     value: `${payload}.${await sign(payload)}`,
     maxAge: SESSION_MAX_AGE_SECONDS,
   };
 }
 
-/** ກວດ cookie — ຄືນ true ສະເພາະລາຍເຊັນຖືກ ແລະ ຍັງບໍ່ໝົດອາຍຸ */
-export async function verifySessionToken(
+/**
+ * ກວດ cookie — ຄືນຂໍ້ມູນ session ສະເພາະລາຍເຊັນຖືກ ແລະ ຍັງບໍ່ໝົດອາຍຸ.
+ *
+ * ຮັບຮູບແບບເກົ່າ (`<ໝົດອາຍຸ>.<ລາຍເຊັນ>`) ນຳ ເພື່ອບໍ່ໃຫ້ຄົນທີ່ login ຄ້າງໄວ້
+ * ຖືກເຕະອອກໝົດຕອນອັບເດດລະບົບ.
+ */
+export async function verifySession(
   token: string | undefined,
-): Promise<boolean> {
-  if (!token) return false;
+): Promise<Session | null> {
+  if (!token) return null;
 
   const dot = token.lastIndexOf(".");
-  if (dot <= 0) return false;
+  if (dot <= 0) return null;
 
   const payload = token.slice(0, dot);
   const signature = token.slice(dot + 1);
 
-  const expires = Number(payload);
-  if (!Number.isFinite(expires) || expires * 1000 <= Date.now()) return false;
+  // ຮູບແບບໃໝ່ມີ 2 ທ່ອນໃນ payload · ຮູບແບບເກົ່າມີທ່ອນດຽວ (ໝົດອາຍຸ)
+  const sep = payload.indexOf(".");
+  const userId = sep >= 0 ? payload.slice(0, sep) : "";
+  const expiresText = sep >= 0 ? payload.slice(sep + 1) : payload;
+
+  const expires = Number(expiresText);
+  if (!Number.isFinite(expires) || expires * 1000 <= Date.now()) return null;
 
   try {
-    return timingSafeEqual(signature, await sign(payload));
+    if (!timingSafeEqual(signature, await sign(payload))) return null;
   } catch {
     // SESSION_SECRET ບໍ່ໄດ້ຕັ້ງ — ຖືວ່າບໍ່ຜ່ານ
-    return false;
+    return null;
   }
+
+  return { userId: userId || null };
+}
+
+/** ຜ່ານດ່ານບໍ່ — ໃຊ້ຢູ່ `proxy.ts` ທີ່ຕ້ອງການແຕ່ຄຳຕອບ ແມ່ນ/ບໍ່ */
+export async function verifySessionToken(
+  token: string | undefined,
+): Promise<boolean> {
+  return (await verifySession(token)) !== null;
 }
 
 /** ຄ່າ cookie ມາດຕະຖານ — ອ່ານດ້ວຍ JS ບໍ່ໄດ້ ແລະ ບໍ່ຖືກສົ່ງຂ້າມເວັບ */

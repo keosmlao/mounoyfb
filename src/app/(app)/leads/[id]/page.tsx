@@ -43,10 +43,10 @@ export default async function EditLeadPage({
         }
       />
 
-      <div className="grid max-w-3xl gap-5">
+      <div className="grid max-w-3xl gap-3">
         <Card>
           <CardHeader title="ຂໍ້ມູນລູກຄ້າ" />
-          <form action={update} className="grid gap-4 p-4 sm:grid-cols-2">
+          <form action={update} className="grid gap-3 p-3 sm:grid-cols-2">
             <Field label="ວັນທີ່ *">
               <input
                 name="date"

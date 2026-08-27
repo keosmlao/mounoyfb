@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { enumVal, num0, reqDate, reqStr, str } from "@/lib/form";
 import { LeadStatus } from "@/generated/prisma/enums";
 
@@ -41,7 +42,8 @@ export async function updateLead(id: string, fd: FormData) {
 
 export async function deleteLead(id: string) {
   await requireSession();
-  await prisma.lead.delete({ where: { id } });
+  const removed = await prisma.lead.delete({ where: { id } });
+  await recordAudit("lead.delete", removed.name);
   revalidatePath("/leads");
   redirect("/leads");
 }

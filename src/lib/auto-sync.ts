@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { addDays, todayStr, type DateRange } from "./date";
 import {
   activeSyncLog,
+  checkFbToken,
   getFbConfig,
   runSyncJob,
   startSyncLog,
@@ -263,6 +264,39 @@ export async function runInboxSync(): Promise<void> {
 
 let inboxTicking = false;
 
+/**
+ * ດຶງກ່ອງຂໍ້ຄວາມ "ດຽວນີ້" ຕາມການແຈ້ງຈາກ webhook.
+ *
+ * ບໍ່ໄດ້ຂຽນຂໍ້ມູນຈາກ payload ຂອງ webhook ໂດຍກົງ — ໃຫ້ `syncInbox()` ດຶງເອງ
+ * ເພື່ອບໍ່ໃຫ້ມີ**ສອງເສັ້ນທາງຂຽນ**ທີ່ຄ່ອຍໆເພື້ອນຈາກກັນ. webhook ໃຫ້ "ຄວາມໄວ"
+ * ສ່ວນ `syncInbox()` ໃຫ້ "ຄວາມຖືກຕ້ອງ" (page token, ໂພສໂຄສະນາ, ກັນຊ້ຳ).
+ *
+ * Facebook ສົ່ງແຈ້ງມາຖີ່ຫຼາຍຕອນມີຄົນຄຸຍກັນ — ຈຶ່ງເວັ້ນໄລຍະໄວ້
+ * ບໍ່ດັ່ງນັ້ນຮອບດຶງຈະຊ້ອນກັນຈົນຊົນ rate limit ຂອງ Facebook ເອງ.
+ */
+const WEBHOOK_MIN_GAP_MS = 30_000;
+
+let lastWebhookSync = 0;
+
+export async function syncInboxFromWebhook(): Promise<void> {
+  if (inboxTicking) return;
+  if (Date.now() - lastWebhookSync < WEBHOOK_MIN_GAP_MS) return;
+
+  // ບໍ່ມີເພຈທີ່ຕໍ່ token ໄວ້ ກໍ່ບໍ່ຕ້ອງເອີ້ນ API
+  const ready = await prisma.fbPage.count({
+    where: { inboxOn: true, token: { not: null } },
+  });
+  if (ready === 0) return;
+
+  lastWebhookSync = Date.now();
+  inboxTicking = true;
+  try {
+    await runInboxSync();
+  } finally {
+    inboxTicking = false;
+  }
+}
+
 async function tickAutoInbox(): Promise<void> {
   if (inboxTicking) return;
   inboxTicking = true;
@@ -285,6 +319,29 @@ async function tickAutoInbox(): Promise<void> {
   }
 }
 
+// --------------------------------------------------- ກວດອາຍຸ token ເປັນໄລຍະ
+
+/**
+ * ກວດ token ຫ່າງກັນ 6 ຊົ່ວໂມງ — ຖີ່ກວ່ານີ້ບໍ່ໄດ້ຫຍັງເພີ່ມ ເພາະວັນໝົດອາຍຸ
+ * ບໍ່ໄດ້ປ່ຽນເອງ. ກວດແຍກຈາກການດຶງຂໍ້ມູນ ເພື່ອໃຫ້ຮູ້ວ່າ token ຈະໝົດ
+ * **ເຖິງແມ່ນປິດການດຶງອັດຕະໂນມັດໄວ້** ຫຼື ບໍ່ມີແຄມເປນທີ່ຍິງຢູ່.
+ */
+const TOKEN_CHECK_MS = 6 * 60 * 60 * 1000;
+
+let lastTokenCheck = 0;
+
+async function tickTokenCheck(): Promise<void> {
+  if (Date.now() - lastTokenCheck < TOKEN_CHECK_MS) return;
+  try {
+    if (!(await getFbConfig())) return;
+    // ໝາຍເວລາໄວ້ກ່ອນເອີ້ນ — ຖ້າ Facebook ລົ້ມ ຈະບໍ່ໄດ້ລອງຊ້ຳທຸກໆນາທີ
+    lastTokenCheck = Date.now();
+    await checkFbToken();
+  } catch (error) {
+    console.error("[token-check]", error);
+  }
+}
+
 /** ກວດທຸກໆນາທີ — ຖືກ ແລ້ວແຕ່ວ່າຮອດເວລາບໍ່ ຈຶ່ງດຶງຈິງ */
 const TICK_MS = 60_000;
 /** ລໍໃຫ້ເຊີບເວີ/ຖານຂໍ້ມູນຕັ້ງໂຕກ່ອນຈຶ່ງກວດຮອບທຳອິດ */
@@ -297,6 +354,7 @@ export function startAutoSyncScheduler(): void {
   if (timer) return;
 
   const tick = async () => {
+    await tickTokenCheck();
     await tickAutoSync();
     await tickAutoInbox();
   };

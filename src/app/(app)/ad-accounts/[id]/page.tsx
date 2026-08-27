@@ -47,7 +47,7 @@ export default async function EditAdAccountPage({
         }
       />
 
-      <div className="grid max-w-3xl gap-5">
+      <div className="grid max-w-3xl gap-3">
         <Card>
           <CardHeader title="ຂໍ້ມູນບັນຊີ" />
           <AdAccountForm action={update} account={account} />

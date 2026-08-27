@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { bool, num0, reqStr, str } from "@/lib/form";
 
 function readForm(fd: FormData) {
@@ -34,7 +35,8 @@ export async function updateProduct(id: string, fd: FormData) {
 
 export async function deleteProduct(id: string) {
   await requireSession();
-  await prisma.product.delete({ where: { id } });
+  const removed = await prisma.product.delete({ where: { id } });
+  await recordAudit("product.delete", removed.name);
   revalidatePath("/products");
   redirect("/products");
 }

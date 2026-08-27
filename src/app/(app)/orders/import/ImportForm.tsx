@@ -37,7 +37,7 @@ export function ImportForm({
         title="ນຳເຂົ້າຍອດຂາຍຈາກ CSV / Excel"
         subtitle="ລະບົບຈະເດົາຫົວຄໍລຳໃຫ້ ແລ້ວໃຫ້ເບິ່ງຕົວຢ່າງກ່ອນບັນທຶກ"
       />
-      <form action={runPreview} className="grid gap-4 p-4">
+      <form action={runPreview} className="grid gap-3 p-3">
         {state.phase === "error" ? (
           <p
             role="alert"
@@ -49,12 +49,12 @@ export function ImportForm({
 
         <Field
           label="ເລືອກໄຟລ໌"
-          hint="ບັນທຶກຈາກ Excel ເປັນ CSV ກ່ອນ (File → Save As → CSV UTF-8)"
+          hint="ຮັບໄຟລ໌ .csv — ຖ້າເປັນ Excel ໃຫ້ File → Save As → “CSV UTF-8 (.csv)” ກ່ອນ"
         >
           <input
             type="file"
             name="file"
-            accept=".csv,.tsv,.txt,text/csv"
+            accept=".csv,.tsv,.txt,.xlsx,.xls,text/csv"
             className="field"
           />
         </Field>
@@ -139,7 +139,7 @@ function Preview({
   const blocked = result.missing.length > 0;
 
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-3">
       <Card>
         <CardHeader
           title="ກວດການຈັບຄູ່ຄໍລຳ"

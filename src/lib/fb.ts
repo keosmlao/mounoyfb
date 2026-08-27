@@ -2,7 +2,8 @@ import { prisma } from "./prisma";
 import { chunkRange, countDays, parseDate, type DateRange } from "./date";
 import { InsightLevel, SegmentKind, type EntityStatus } from "@/generated/prisma/enums";
 import { SEGMENT_DEFS, buildSegKey } from "./segments";
-import { fromMinorUnits } from "./money";
+import { fromMinorUnits, toMinorUnits } from "./money";
+import { UNKNOWN_TOKEN, type TokenState } from "./sync-health";
 
 /**
  * ຕົວເຊື່ອມກັບ Facebook Marketing API.
@@ -58,11 +59,77 @@ export async function getFbConfig(): Promise<FbConfig | null> {
   return accessToken ? { accessToken, apiVersion } : null;
 }
 
+type GraphError = {
+  message: string;
+  type?: string;
+  code: number;
+  error_subcode?: number;
+  error_user_msg?: string;
+};
+
 type GraphResponse<T> = {
   data?: T[];
   paging?: { next?: string };
-  error?: { message: string; type: string; code: number };
+  error?: GraphError;
 };
+
+/**
+ * ລະຫັດຜິດພາດທີ່ "ລໍແລ້ວລອງໃໝ່ອາດຜ່ານ" — ຮ້ອງຖີ່ເກີນ ຫຼື ຝັ່ງ Facebook ຂັດຂ້ອງເອງ.
+ * 1/2 = ຂັດຂ້ອງຊົ່ວຄາວ · 4/17/32/341/613 = ຊົນເພດານການຮ້ອງ.
+ * ນອກຈາກນີ້ (ເຊັ່ນ 190 token ຕາຍ, 100 ບໍ່ພົບ) ລອງອີກກໍ່ໄດ້ຜົນເກົ່າ ຈຶ່ງບໍ່ລອງ.
+ */
+const RETRYABLE_CODES = new Set([1, 2, 4, 17, 32, 341, 613]);
+
+/**
+ * ລໍດົນຂຶ້ນເລື່ອຍໆ — ເພດານຂອງ Facebook ນັບເປັນຊ່ວງເວລາ ການລອງຖີ່ໆ
+ * ມີແຕ່ຈະຍືດເວລາຖືກບລັອກໃຫ້ດົນຂຶ້ນ.
+ *
+ * ລວມແລ້ວລໍບໍ່ເກີນ 30 ວິນາທີ ຈຶ່ງບໍ່ຊົນກົດ "ວຽກຄ້າງ 15 ນາທີ" ຂອງ `activeSyncLog()`
+ * (heartbeat ຂອງ `runSyncJob` ອັບເດດທຸກ 1 ນາທີຢູ່ແລ້ວ).
+ */
+const RETRY_DELAYS_MS = [2_000, 8_000, 20_000];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function graphErrorOf(error: GraphError): Error {
+  const detail = error.error_user_msg ?? error.message;
+  return new Error(`Facebook API: ${detail} (code ${error.code})`);
+}
+
+/**
+ * ຮ້ອງ Graph API 1 ເທື່ອ ພ້ອມລອງໃໝ່ເມື່ອຊົນເພດານ ຫຼື ເນັດຂັດ.
+ *
+ * ກ່ອນນີ້ການດຶງຍ້ອນຫຼັງຍາວໆ ພໍຊົນ rate limit ກາງທາງແມ່ນ **ລົ້ມທັງວຽກ**
+ * ແລ້ວຕ້ອງເລີ່ມໃໝ່ຕັ້ງແຕ່ຕົ້ນ — ເສຍທັງເວລາ ແລະ ໂຄຕ້າທີ່ໃຊ້ໄປແລ້ວ.
+ */
+async function graphFetch<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<T & { error?: GraphError }> {
+  let lastError: Error = new Error("Facebook API: ຮ້ອງບໍ່ສຳເລັດ");
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1]);
+
+    try {
+      const res = await fetch(url, { cache: "no-store", ...init });
+      const json = (await res.json()) as T & { error?: GraphError };
+
+      if (json.error && RETRYABLE_CODES.has(json.error.code)) {
+        lastError = graphErrorOf(json.error);
+        continue;
+      }
+      return json;
+    } catch (error) {
+      // ເນັດຂັດ / ຕອບບໍ່ເປັນ JSON — ລອງໃໝ່ໄດ້ຄືກັນ
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError;
+}
 
 /** ເອີ້ນ Graph API ພ້ອມໄລ່ໜ້າ (paging) ໃຫ້ຄົບ */
 async function graphAll<T>(
@@ -80,12 +147,9 @@ async function graphAll<T>(
 
   // ຈຳກັດຈຳນວນໜ້າ ເພື່ອກັນ loop ບໍ່ຮູ້ຈົບ ຖ້າ API ຄືນ paging ຜິດປົກກະຕິ
   for (let page = 0; page < 50; page++) {
-    const res = await fetch(url, { cache: "no-store" });
-    const json = (await res.json()) as GraphResponse<T>;
+    const json = await graphFetch<GraphResponse<T>>(url);
 
-    if (json.error) {
-      throw new Error(`Facebook API: ${json.error.message} (code ${json.error.code})`);
-    }
+    if (json.error) throw graphErrorOf(json.error);
     if (json.data) out.push(...json.data);
     if (!json.paging?.next) break;
     url = json.paging.next;
@@ -101,16 +165,10 @@ async function graphOne<T>(
   params: Record<string, string>,
 ): Promise<T> {
   const search = new URLSearchParams({ ...params, access_token: config.accessToken });
-  const res = await fetch(
+  const json = await graphFetch<T>(
     `${GRAPH}/${config.apiVersion}/${path}?${search.toString()}`,
-    { cache: "no-store" },
   );
-  const json = (await res.json()) as T & {
-    error?: { message: string; code: number };
-  };
-  if (json.error) {
-    throw new Error(`Facebook API: ${json.error.message} (code ${json.error.code})`);
-  }
+  if (json.error) throw graphErrorOf(json.error);
   return json;
 }
 
@@ -120,26 +178,21 @@ async function graphWrite(
   path: string,
   body: Record<string, string>,
 ): Promise<void> {
-  const res = await fetch(`${GRAPH}/${config.apiVersion}/${path}`, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ ...body, access_token: config.accessToken }).toString(),
-  });
-  const json = (await res.json()) as {
-    success?: boolean;
-    error?: {
-      message: string;
-      code: number;
-      error_subcode?: number;
-      error_user_msg?: string;
-    };
-  };
-  if (json.error) {
-    // error_user_msg ມັກບອກເຫດຜົນທີ່ເຂົ້າໃຈງ່າຍກວ່າ message ດິບ
-    const detail = json.error.error_user_msg ?? json.error.message;
-    throw new Error(`Facebook API: ${detail} (code ${json.error.code})`);
-  }
+  // ລອງໃໝ່ໄດ້ຢ່າງປອດໄພ — ການສັ່ງເປັນ "ຕັ້ງຄ່າໃຫ້ເປັນ X" ບໍ່ແມ່ນ "ບວກ X"
+  // ສັ່ງຊ້ຳຈຶ່ງໄດ້ຜົນອັນດຽວກັນ
+  const json = await graphFetch<{ success?: boolean }>(
+    `${GRAPH}/${config.apiVersion}/${path}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        ...body,
+        access_token: config.accessToken,
+      }).toString(),
+    },
+  );
+  // error_user_msg ມັກບອກເຫດຜົນທີ່ເຂົ້າໃຈງ່າຍກວ່າ message ດິບ
+  if (json.error) throw graphErrorOf(json.error);
 }
 
 /**
@@ -177,6 +230,169 @@ export function explainFbError(error: unknown): string {
     return "ຮ້ອງ API ຖີ່ເກີນ (rate limit) — ລໍສັກໜ້ອຍແລ້ວລອງໃໝ່";
   }
   return message;
+}
+
+/**
+ * ຊ່ອງຂອງແຄມເປນທີ່ **Facebook ເປັນເຈົ້າຂອງ ແລະ ເຮົາຂຽນກັບໄປໄດ້**.
+ *
+ * ນອກຈາກນີ້ (ເປົ້າໝາຍ, ວັນເລີ່ມ/ຈົບ) Facebook ບໍ່ຮັບການແກ້ຫຼັງສ້າງແລ້ວ
+ * ຫຼື ຮັບແບບບໍ່ແນ່ນອນ — ຈຶ່ງລັອກໄວ້ຢູ່ຟອມແທນທີ່ຈະໃຫ້ແກ້ແລ້ວຫາຍ.
+ */
+export type FbCampaignEdit = {
+  name?: string;
+  dailyBudget?: number | null;
+  lifetimeBudget?: number | null;
+};
+
+/**
+ * ສົ່ງການແກ້ໄຂແຄມເປນກັບໄປ Facebook.
+ *
+ * ຕ້ອງເອີ້ນ **ກ່ອນ** ບັນທຶກລົງຖານຂໍ້ມູນສະເໝີ — ຖ້າ Facebook ປະຕິເສດແລ້ວ
+ * ເຮົາຍັງບັນທຶກ ໜ້າຈໍຈະບອກງົບໃໝ່ ທັງທີ່ Facebook ຍັງຕັດເງິນຕາມງົບເກົ່າ
+ * ແລະ ຮອບ sync ຖັດໄປຈະທັບຄ່າຂອງເຮົາຖິ້ມຢູ່ດີ.
+ *
+ * ງົບຕ້ອງສົ່ງເປັນ**ຫົວໜ່ວຍນ້ອຍສຸດ**ຂອງສະກຸນບັນຊີ ($5.00 → "500").
+ */
+export async function updateFbCampaign(
+  fbCampaignId: string,
+  fields: FbCampaignEdit,
+  currency: string,
+): Promise<void> {
+  const config = await getFbConfig();
+  if (!config) {
+    throw new Error("ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token — ສັ່ງໄປ Facebook ບໍ່ໄດ້");
+  }
+
+  const body: Record<string, string> = {};
+  if (fields.name !== undefined) body.name = fields.name;
+
+  // ສົ່ງງົບໄດ້ເທື່ອລະແບບ — Facebook ປະຕິເສດຖ້າສົ່ງທັງລາຍວັນ ແລະ ລາຍລວມພ້ອມກັນ
+  if (fields.dailyBudget !== undefined && fields.dailyBudget !== null) {
+    body.daily_budget = String(toMinorUnits(fields.dailyBudget, currency));
+  } else if (
+    fields.lifetimeBudget !== undefined &&
+    fields.lifetimeBudget !== null
+  ) {
+    body.lifetime_budget = String(toMinorUnits(fields.lifetimeBudget, currency));
+  }
+
+  if (Object.keys(body).length === 0) return;
+  await graphWrite(config, fbCampaignId, body);
+}
+
+// ------------------------------------------------------------ ສຸຂະພາບຂອງ token
+
+/**
+ * ຜົນການກວດ token ຖືກເກັບໄວ້ໃນ `AppSetting` ບໍ່ແມ່ນກວດສົດທຸກເທື່ອ —
+ * `buildAlerts()` ຖືກເອີ້ນທຸກຄັ້ງທີ່ເປີດໜ້າ ຖ້າໄປເອີ້ນ Facebook ນຳ
+ * ໜ້າຈໍຈະຊ້າ ແລະ ກິນໂຄຕ້າ API ຈົນຊົນ rate limit.
+ */
+const TOKEN_STATE_KEYS = {
+  checkedAt: "fbTokenCheckedAt",
+  valid: "fbTokenValid",
+  expiresAt: "fbTokenExpiresAt",
+  error: "fbTokenError",
+} as const;
+
+async function putTokenState(key: string, value: string) {
+  await prisma.appSetting.upsert({
+    where: { key },
+    create: { key, value },
+    update: { value },
+  });
+}
+
+/** ອ່ານຜົນການກວດຄັ້ງຫຼ້າສຸດ — ບໍ່ເອີ້ນ Facebook */
+export async function readTokenState(): Promise<TokenState> {
+  const rows = await prisma.appSetting.findMany({
+    where: { key: { in: Object.values(TOKEN_STATE_KEYS) } },
+  });
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+
+  const checkedAt = map.get(TOKEN_STATE_KEYS.checkedAt);
+  const valid = map.get(TOKEN_STATE_KEYS.valid);
+  const expiresAt = map.get(TOKEN_STATE_KEYS.expiresAt);
+
+  return {
+    checkedAt: checkedAt ? new Date(checkedAt) : null,
+    valid: valid === undefined ? null : valid === "1",
+    // ຄ່າວ່າງ = ບໍ່ໝົດອາຍຸ (token ຂອງ system user) — ຄົນລະຢ່າງກັບ "ຍັງບໍ່ຮູ້"
+    expiresAt: expiresAt ? new Date(expiresAt) : null,
+    error: map.get(TOKEN_STATE_KEYS.error) || null,
+  };
+}
+
+type DebugTokenResponse = {
+  data?: {
+    is_valid?: boolean;
+    /** unix seconds — 0 ຫຼື ບໍ່ມີ = ບໍ່ໝົດອາຍຸ */
+    expires_at?: number;
+    scopes?: string[];
+    error?: { message?: string; code?: number };
+  };
+};
+
+/**
+ * ຖາມ Facebook ວ່າ token ຍັງໃຊ້ໄດ້ບໍ່ ແລະ ຈະໝົດອາຍຸເມື່ອໃດ ແລ້ວເກັບຜົນໄວ້.
+ *
+ * ເອີ້ນຈາກຕົວຕັ້ງເວລາ (ມື້ລະສອງສາມເທື່ອ) ແລະ ຕອນຄົນກົດ “ທົດສອບການເຊື່ອມຕໍ່”.
+ * ບໍ່ throw — ຄືນສະຖານະທີ່ຮູ້ໄດ້ ເພື່ອບໍ່ໃຫ້ວຽກອື່ນລົ້ມຕາມ.
+ */
+export async function checkFbToken(): Promise<TokenState> {
+  const config = await getFbConfig();
+  if (!config) return UNKNOWN_TOKEN;
+
+  const save = async (state: TokenState) => {
+    await putTokenState(TOKEN_STATE_KEYS.checkedAt, new Date().toISOString());
+    await putTokenState(TOKEN_STATE_KEYS.valid, state.valid ? "1" : "0");
+    await putTokenState(
+      TOKEN_STATE_KEYS.expiresAt,
+      state.expiresAt ? state.expiresAt.toISOString() : "",
+    );
+    await putTokenState(TOKEN_STATE_KEYS.error, state.error ?? "");
+    return state;
+  };
+
+  try {
+    const res = await graphOne<DebugTokenResponse>(config, "debug_token", {
+      input_token: config.accessToken,
+    });
+    const data = res.data;
+    if (data?.is_valid === false) {
+      return save({
+        checkedAt: new Date(),
+        valid: false,
+        expiresAt: null,
+        error: data.error?.message ?? "Facebook ບອກວ່າ token ນີ້ໃຊ້ບໍ່ໄດ້ແລ້ວ",
+      });
+    }
+    return save({
+      checkedAt: new Date(),
+      valid: true,
+      // expires_at = 0 ແປວ່າບໍ່ໝົດອາຍຸ ບໍ່ແມ່ນ "ໝົດຕັ້ງແຕ່ປີ 1970"
+      expiresAt: data?.expires_at ? new Date(data.expires_at * 1000) : null,
+      error: null,
+    });
+  } catch {
+    // ບາງ token ກວດຕົວເອງຜ່ານ debug_token ບໍ່ໄດ້ (ຕ້ອງໃຊ້ app token) —
+    // ຖອຍໄປຮ້ອງ /me ແທນ: ຜ່ານ = ຍັງໃຊ້ໄດ້ ແຕ່ບໍ່ຮູ້ວັນໝົດອາຍຸ
+    try {
+      await graphOne<{ id: string }>(config, "me", { fields: "id" });
+      return save({
+        checkedAt: new Date(),
+        valid: true,
+        expiresAt: null,
+        error: null,
+      });
+    } catch (meError) {
+      return save({
+        checkedAt: new Date(),
+        valid: false,
+        expiresAt: null,
+        error: explainFbError(meError),
+      });
+    }
+  }
 }
 
 /** ສະຖານະທີ່ສັ່ງກັບໄປ Facebook ໄດ້ — ອັນອື່ນເປັນສະຖານະພາຍໃນລະບົບເຮົາເອງ */

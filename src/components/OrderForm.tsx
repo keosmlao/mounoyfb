@@ -43,7 +43,7 @@ export function OrderForm({
   submitLabel?: string;
 }) {
   return (
-    <form action={action} className="grid gap-4 p-4 sm:grid-cols-2">
+    <form action={action} className="grid gap-3 p-3 sm:grid-cols-2">
       <Field label="ວັນທີ່ *">
         <input
           name="date"

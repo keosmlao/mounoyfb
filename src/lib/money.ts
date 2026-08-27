@@ -75,3 +75,13 @@ export function fromMinorUnits(
   if (!Number.isFinite(n)) return null;
   return WHOLE_UNIT_CURRENCIES.has(currency.toUpperCase()) ? n : n / 100;
 }
+
+/**
+ * ແປງຫົວໜ່ວຍເຕັມ ກັບໄປເປັນຫົວໜ່ວຍນ້ອຍສຸດ ເພື່ອ**ສົ່ງໄປ** Facebook.
+ * ກົງກັນຂ້າມກັບ `fromMinorUnits` — ໃຊ້ຊຸດສະກຸນອັນດຽວກັນ
+ * ຈຶ່ງບໍ່ມີທາງທີ່ອ່ານກັບຂຽນຈະໃຊ້ກົດຄົນລະຢ່າງ.
+ */
+export function toMinorUnits(value: number, currency: string): number {
+  const whole = WHOLE_UNIT_CURRENCIES.has(currency.toUpperCase());
+  return Math.round(whole ? value : value * 100);
+}

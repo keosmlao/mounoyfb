@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
-import { StatTile } from "@/components/StatTile";
+import { StatStrip, StatTile } from "@/components/StatTile";
 import { DateRangeBar } from "@/components/DateRangeBar";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { BarList, type BarRow } from "@/components/charts/BarList";
@@ -208,7 +208,7 @@ export default async function DashboardPage({
       <DateRangeBar basePath="/" range={range} activePreset={sp.preset} />
 
       {/* ຕົວເລກນຳ — ກຳໄລຈິງຈາກອໍເດີ ບໍ່ແມ່ນຈາກ pixel ຂອງ Facebook */}
-      <Card className="performance-hero mb-6 overflow-hidden p-5 sm:p-7">
+      <Card className="performance-hero mb-4 overflow-hidden p-5 sm:p-7">
         <div className="relative z-10 flex flex-wrap items-end justify-between gap-7">
           <div>
             <div className="mb-3 flex items-center gap-2">
@@ -271,7 +271,7 @@ export default async function DashboardPage({
       </Card>
 
       {topAdvice.length > 0 ? (
-        <Card className="mb-5">
+        <Card className="mb-3">
           <CardHeader
             title="ຄວນເຮັດຫຍັງຕໍ່"
             subtitle="ຄິດຈາກຜົນແຍກກຸ່ມຂອງຊ່ວງທີ່ເລືອກ"
@@ -286,7 +286,7 @@ export default async function DashboardPage({
       ) : null}
 
       {alerts.length > 0 ? (
-        <Card className="mb-5">
+        <Card className="mb-3">
           <CardHeader
             title="ຕ້ອງລົງມື"
             subtitle={`${countActionable(alerts)} ເລື່ອງດ່ວນ ຈາກທັງໝົດ ${alerts.length} ການແຈ້ງເຕືອນ`}
@@ -301,7 +301,7 @@ export default async function DashboardPage({
       ) : null}
 
       {blocked.length > 0 ? (
-        <Card className="mb-5">
+        <Card className="mb-3">
           <CardHeader
             title="ຍັງຕັດສິນບໍ່ໄດ້"
             subtitle="ຂາດຂໍ້ມູນຫຍັງ ແລະ ຕ້ອງເຮັດຫຍັງຈຶ່ງຕັດສິນໄດ້"
@@ -311,7 +311,7 @@ export default async function DashboardPage({
       ) : null}
 
       {/* 5 ຕົວທີ່ໃຊ້ຕັດສິນໃຈຈິງ — ຕົວອື່ນຢູ່ໜ້າ ວິເຄາະ ແລະ ລາຍງານ */}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <StatStrip cols={5}>
         <StatTile
           label="ຄ່າໂຄສະນາ"
           value={money(total.spendLak)}
@@ -354,9 +354,9 @@ export default async function DashboardPage({
           upIsGood={false}
           hint={econ ? `ເພດານ ${money(econ.marginPerOrder)}` : "ຕ້ອງມີອໍເດີກ່ອນ"}
         />
-      </div>
+      </StatStrip>
 
-      <Card className="mb-5">
+      <Card className="mb-3">
         <CardHeader
           title="ຄ່າໂຄສະນາ ທຽບ ຍອດຂາຍ ລາຍວັນ"
           subtitle="ຍອດຂາຍມາຈາກອໍເດີທີ່ບັນທຶກໄວ້ — ທັງສອງເສັ້ນໃຊ້ແກນດຽວກັນ"
@@ -373,7 +373,7 @@ export default async function DashboardPage({
         />
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-3 xl:grid-cols-2">
         <Card>
           <CardHeader
             title="ແຄມເປນທີ່ໃຊ້ເງິນຫຼາຍສຸດ"

@@ -21,8 +21,22 @@ export function CampaignForm({
   products: Option[];
   submitLabel?: string;
 }) {
+  /**
+   * ແຄມເປນທີ່ Facebook ເປັນເຈົ້າຂອງ — ບາງຊ່ອງແກ້ຢູ່ນີ້ບໍ່ໄດ້.
+   * ລັອກໄວ້ດີກວ່າປ່ອຍໃຫ້ແກ້ແລ້ວຫາຍໄປຕອນ sync ຮອບໜ້າ ໂດຍບໍ່ມີໃຜຮູ້.
+   */
+  const fbLinked = Boolean(campaign?.fbCampaignId);
+  const lockedHint = "Facebook ເປັນເຈົ້າຂອງຊ່ອງນີ້ — ປ່ຽນຢູ່ Ads Manager";
+
   return (
-    <form action={action} className="grid gap-4 p-4 sm:grid-cols-2">
+    <form action={action} className="grid gap-3 p-3 sm:grid-cols-2">
+      {fbLinked ? (
+        <p className="sm:col-span-2 rounded-[var(--radius-sm)] border border-[var(--info)]/30 bg-[var(--info-soft)] px-2.5 py-1.5 text-xs text-[var(--fg-muted)]">
+          ແຄມເປນນີ້ຜູກກັບ Facebook — <strong>ຊື່ ແລະ ງົບ</strong> ທີ່ແກ້ຢູ່ນີ້
+          ຈະຖືກສົ່ງໄປ Facebook ຕົວຈິງ. ຖ້າ Facebook ບໍ່ຮັບ ຈະບໍ່ບັນທຶກຫຍັງເລີຍ.
+          ຊ່ອງທີ່ຈືດຢູ່ແມ່ນຊ່ອງທີ່ແກ້ໄດ້ສະເພາະຢູ່ Ads Manager.
+        </p>
+      ) : null}
       <Field label="ຊື່ແຄມເປນ *" className="sm:col-span-2">
         <input
           name="name"
@@ -51,10 +65,14 @@ export function CampaignForm({
         </select>
       </Field>
 
-      <Field label="ເປົ້າໝາຍ (objective)">
+      <Field
+        label="ເປົ້າໝາຍ (objective)"
+        hint={fbLinked ? "ສ້າງແລ້ວ Facebook ປ່ຽນເປົ້າໝາຍບໍ່ໄດ້" : undefined}
+      >
         <select
           name="objective"
           defaultValue={campaign?.objective ?? "MESSAGES"}
+          disabled={fbLinked}
           className="field"
         >
           {options(OBJECTIVE_LABEL).map((o) => (
@@ -95,7 +113,14 @@ export function CampaignForm({
         </select>
       </Field>
 
-      <Field label="ງົບຕໍ່ວັນ" hint="ຕາມສະກຸນເງິນຂອງບັນຊີໂຄສະນາ">
+      <Field
+        label="ງົບຕໍ່ວັນ"
+        hint={
+          fbLinked
+            ? "ຕາມສະກຸນບັນຊີ · ບັນທຶກແລ້ວສົ່ງໄປ Facebook ເລີຍ"
+            : "ຕາມສະກຸນເງິນຂອງບັນຊີໂຄສະນາ"
+        }
+      >
         <input
           name="dailyBudget"
           type="number"
@@ -117,20 +142,22 @@ export function CampaignForm({
         />
       </Field>
 
-      <Field label="ວັນເລີ່ມ">
+      <Field label="ວັນເລີ່ມ" hint={fbLinked ? lockedHint : undefined}>
         <input
           name="startDate"
           type="date"
           defaultValue={campaign?.startDate ? toDateInput(campaign.startDate) : ""}
+          disabled={fbLinked}
           className="field"
         />
       </Field>
 
-      <Field label="ວັນສິ້ນສຸດ">
+      <Field label="ວັນສິ້ນສຸດ" hint={fbLinked ? lockedHint : undefined}>
         <input
           name="endDate"
           type="date"
           defaultValue={campaign?.endDate ? toDateInput(campaign.endDate) : ""}
+          disabled={fbLinked}
           className="field"
         />
       </Field>
@@ -144,10 +171,14 @@ export function CampaignForm({
         />
       </Field>
 
-      <Field label="ສະຖານະ">
+      <Field
+        label="ສະຖານະ"
+        hint={fbLinked ? "ຢຸດ/ຍິງຕໍ່ ໃຊ້ປຸ່ມຢູ່ໜ້າແຄມເປນ — ມັນສັ່ງໄປ Facebook ໃຫ້" : undefined}
+      >
         <select
           name="status"
           defaultValue={campaign?.status ?? "ACTIVE"}
+          disabled={fbLinked}
           className="field"
         >
           {options(STATUS_LABEL).map((o) => (

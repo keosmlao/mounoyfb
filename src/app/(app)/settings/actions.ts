@@ -4,9 +4,11 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { bool, num, reqDate, reqStr, str } from "@/lib/form";
 import { countDays, parseDate, resolveRange } from "@/lib/date";
 import {
+  checkFbToken,
   fetchFbAssets,
   importFbAssets,
   runSyncJob,
@@ -53,6 +55,21 @@ export async function saveSettings(fd: FormData) {
   if (token) await put("fbAccessToken", token);
   if (str(fd, "clearToken") === "1") await put("fbAccessToken", null);
 
+  // token ປ່ຽນແລ້ວ ຕ້ອງກວດຄືນທັນທີ — ບໍ່ດັ່ງນັ້ນຄຳເຕືອນ “token ໃຊ້ບໍ່ໄດ້”
+  // ຂອງອັນເກົ່າຈະຄ້າງຢູ່ຈົນຮອດຮອບກວດຖັດໄປ (ອີກ 6 ຊົ່ວໂມງ)
+  if (token || str(fd, "clearToken") === "1") await checkFbToken();
+
+  // --- Webhook: app secret ໃຊ້ກວດລາຍເຊັນ · verify token ໃຊ້ຕອນຢືນຢັນຄັ້ງທຳອິດ
+  if (token) await recordAudit("settings.token", null, "ໃສ່ access token ໃໝ່");
+  if (str(fd, "clearToken") === "1") {
+    await recordAudit("settings.token", null, "ລຶບ access token ອອກ");
+  }
+
+  const appSecret = str(fd, "fbAppSecret");
+  if (appSecret) await put("fbAppSecret", appSecret);
+  if (str(fd, "clearAppSecret") === "1") await put("fbAppSecret", null);
+  await put("fbWebhookVerifyToken", str(fd, "fbWebhookVerifyToken"));
+
   revalidatePath("/", "layout");
 }
 
@@ -70,6 +87,8 @@ export async function testFbConnection(): Promise<FbConnectionState> {
   await requireSession();
   try {
     const assets = await fetchFbAssets();
+    // ຖືໂອກາດອັບເດດວັນໝົດອາຍຸໄປນຳ ຕອນທີ່ຄົນກຳລັງເບິ່ງໜ້ານີ້ຢູ່
+    await checkFbToken();
     return {
       ok: true,
       message:
@@ -82,6 +101,8 @@ export async function testFbConnection(): Promise<FbConnectionState> {
       pagesError: assets.pagesError,
     };
   } catch (error) {
+    // ຕໍ່ບໍ່ໄດ້ກໍ່ຍັງຕ້ອງບັນທຶກສະຖານະ — ຄຳເຕືອນຢູ່ໜ້າຫຼັກອາໄສຄ່ານີ້
+    await checkFbToken();
     return {
       ok: false,
       message: error instanceof Error ? error.message : String(error),

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { bool, enumVal, reqStr, str } from "@/lib/form";
 import { EntityStatus } from "@/generated/prisma/enums";
 
@@ -37,7 +38,8 @@ export async function updateFbPage(id: string, fd: FormData) {
 
 export async function deleteFbPage(id: string) {
   await requireSession();
-  await prisma.fbPage.delete({ where: { id } });
+  const removed = await prisma.fbPage.delete({ where: { id } });
+  await recordAudit("fbpage.delete", removed.name);
   revalidatePath("/fb-pages");
   redirect("/fb-pages");
 }

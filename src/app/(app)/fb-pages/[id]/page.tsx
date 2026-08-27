@@ -35,10 +35,10 @@ export default async function EditFbPagePage({
         }
       />
 
-      <div className="grid max-w-2xl gap-5">
+      <div className="grid max-w-2xl gap-3">
         <Card>
           <CardHeader title="ຂໍ້ມູນເພຈ" />
-          <form action={update} className="grid gap-4 p-4 sm:grid-cols-2">
+          <form action={update} className="grid gap-3 p-3 sm:grid-cols-2">
             <Field label="ຊື່ເພຈ *" className="sm:col-span-2">
               <input name="name" required defaultValue={page.name} className="field" />
             </Field>

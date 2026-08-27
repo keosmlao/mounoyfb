@@ -10,7 +10,7 @@ import {
   PageHeader,
 } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { StatTile } from "@/components/StatTile";
+import { StatStrip, StatTile } from "@/components/StatTile";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { DateRangeBar } from "@/components/DateRangeBar";
 import { createAdSet, toggleCampaignStatusSafe } from "../actions";
@@ -198,7 +198,7 @@ export default async function CampaignDetailPage({
         }
       />
 
-      <div className="mb-5 flex flex-wrap items-center gap-2 text-sm text-[var(--fg-muted)]">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-[var(--fg-muted)]">
         <Badge tone={STATUS_TONE[campaign.status]}>
           {STATUS_LABEL[campaign.status]}
         </Badge>
@@ -221,7 +221,7 @@ export default async function CampaignDetailPage({
 
       <DateRangeBar basePath={`/campaigns/${id}`} range={range} activePreset={sp.preset} />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <StatStrip cols={5}>
         <StatTile
           label="ຄ່າໂຄສະນາ"
           value={money(total.spendLak)}
@@ -267,9 +267,9 @@ export default async function CampaignDetailPage({
           previous={prevOrderRows.length ? prevActual.actualRoas : undefined}
           hint={hasOrderData ? `ຍອດຈິງ ${money(actual.netRevenue)}` : "ບໍ່ເດົາຈາກ Meta revenue"}
         />
-      </div>
+      </StatStrip>
 
-      <Card className="mb-5">
+      <Card className="mb-3">
         <CardHeader
           title="ຄ່າໂຄສະນາ ທຽບ ຍອດຂາຍຈິງ ລາຍວັນ"
           subtitle="ຍອດຂາຍນັບສະເພາະ Order ທີ່ສົ່ງສຳເລັດ"
@@ -286,8 +286,8 @@ export default async function CampaignDetailPage({
         />
       </Card>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="grid gap-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid gap-3">
           <Card>
             <CardHeader
               title="ຊຸດໂຄສະນາ (Ad Sets)"
@@ -405,7 +405,7 @@ export default async function CampaignDetailPage({
 
         <Card className="h-fit">
           <CardHeader title="ເພີ່ມຊຸດໂຄສະນາ" />
-          <form action={create} className="grid gap-4 p-4">
+          <form action={create} className="grid gap-3 p-3">
             <Field label="ຊື່ຊຸດໂຄສະນາ *">
               <input name="name" required className="field" placeholder="ກຸ່ມກວ້າງ 25-45" />
             </Field>

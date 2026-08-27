@@ -37,6 +37,24 @@ export type ImportState =
     }
   | { phase: "error"; message: string };
 
+/**
+ * ໄຟລ໌ Excel ບໍ່ແມ່ນຕົວໜັງສື — `.xlsx` ເປັນ zip (ຂຶ້ນຕົ້ນດ້ວຍ "PK")
+ * ແລະ `.xls` ເປັນ OLE2. ອ່ານເປັນຂໍ້ຄວາມຈະໄດ້ຕົວອັກສອນຂີ້ເຫຍື້ອ
+ * ແລ້ວຄົນຈະເຫັນແຕ່ "ຫາຫົວຄໍລຳບໍ່ພົບ" ຊຶ່ງບໍ່ໄດ້ບອກວ່າຜິດຫຍັງແທ້.
+ * ຈັບໃຫ້ໄດ້ຕັ້ງແຕ່ຕົ້ນ ແລ້ວບອກວິທີແກ້ໄປເລີຍ.
+ */
+function looksLikeSpreadsheetFile(head: Uint8Array): boolean {
+  const zip = head[0] === 0x50 && head[1] === 0x4b; // "PK" — .xlsx / .ods
+  const ole =
+    head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0; // .xls
+  return zip || ole;
+}
+
+const EXCEL_HINT =
+  "ນີ້ແມ່ນໄຟລ໌ Excel ຕົວຈິງ ຊຶ່ງລະບົບອ່ານໂດຍກົງບໍ່ໄດ້ — " +
+  "ເປີດໃນ Excel ແລ້ວກົດ File → Save As → ເລືອກ “CSV UTF-8 (.csv)” " +
+  "ຈາກນັ້ນຄ່ອຍເອົາໄຟລ໌ .csv ມາໃສ່ (ຫຼື ຄັດລອກຕາຕະລາງມາວາງໃສ່ຊ່ອງລຸ່ມກໍ່ໄດ້)";
+
 /** ອ່ານຕົວໜັງສືຈາກໄຟລ໌ ຫຼື ຈາກຊ່ອງວາງຂໍ້ຄວາມ */
 async function readInput(fd: FormData): Promise<string> {
   const pasted = str(fd, "text");
@@ -47,7 +65,12 @@ async function readInput(fd: FormData): Promise<string> {
     if (file.size > 5 * 1024 * 1024) {
       throw new Error("ໄຟລ໌ໃຫຍ່ເກີນ 5MB — ແບ່ງເປັນຫຼາຍໄຟລ໌ກ່ອນ");
     }
-    return await file.text();
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (looksLikeSpreadsheetFile(bytes.subarray(0, 4))) {
+      throw new Error(EXCEL_HINT);
+    }
+    return new TextDecoder("utf-8").decode(bytes);
   }
   throw new Error("ຍັງບໍ່ໄດ້ເລືອກໄຟລ໌ ຫຼື ວາງຂໍ້ຄວາມ");
 }

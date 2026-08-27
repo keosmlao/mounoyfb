@@ -41,7 +41,7 @@ export default async function AdAccountsPage() {
         description="ບັນຊີທີ່ Facebook ຕັດຄ່າໂຄສະນາ — ທຸກແຄມເປນຕ້ອງຢູ່ພາຍໃຕ້ບັນຊີໃດໜຶ່ງ"
       />
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_400px]">
         <Card>
           <CardHeader
             title="ລາຍການບັນຊີ"

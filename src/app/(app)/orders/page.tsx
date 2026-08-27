@@ -2,15 +2,16 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { DateRangeBar } from "@/components/DateRangeBar";
-import { StatTile } from "@/components/StatTile";
+import { StatStrip, StatTile } from "@/components/StatTile";
 import { OrderForm } from "@/components/OrderForm";
+import { LoadMore } from "@/components/LoadMore";
 import { createOrder, setOrderStatus } from "./actions";
 import { formatDateLao, parseDate, resolveRange } from "@/lib/date";
 import { formatInt, formatPercent } from "@/lib/format";
 import { loadMoney } from "@/lib/money-server";
 import { aggregateOrders, orderTotals } from "@/lib/orders";
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, options } from "@/lib/labels";
-import { OrderStatus } from "@/generated/prisma/enums";
+import { orderWhere, validOrderStatus } from "@/lib/list-filters";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,12 @@ type Search = {
   status?: string;
   campaign?: string;
   q?: string;
+  /** ຈຳນວນທີ່ສະແດງ (ໂຫຼດເພີ່ມເທື່ອລະ 100) */
+  show?: string;
 };
+
+/** ສະແດງເທື່ອລະຊຸດ — ຮ້ານທີ່ຂາຍດີມີ Order ເປັນພັນຕໍ່ເດືອນ ອອກໝົດຈະໜັກເກີນ */
+const PAGE_SIZE = 100;
 
 export default async function OrdersPage({
   searchParams,
@@ -31,61 +37,95 @@ export default async function OrdersPage({
   const { money } = await loadMoney();
   const sp = await searchParams;
   const range = resolveRange(sp);
-  const validStatus = Object.values(OrderStatus).includes(sp.status as OrderStatus)
-    ? (sp.status as OrderStatus)
-    : undefined;
+  const validStatus = validOrderStatus(sp.status);
+
+  // ເພດານ 2000 ໄວ້ກັນຄົນແກ້ ?show= ໃນ URL ຈົນດຶງທັງຖານຂໍ້ມູນອອກມາ
+  const limit = Math.min(Number(sp.show) || PAGE_SIZE, 2000);
 
   const dateWhere = { gte: parseDate(range.from), lte: parseDate(range.to) };
-  const where = {
-    date: dateWhere,
-    ...(validStatus ? { status: validStatus } : {}),
-    ...(sp.campaign ? { campaignId: sp.campaign } : {}),
-    ...(sp.q
-      ? {
-          OR: [
-            { customerName: { contains: sp.q, mode: "insensitive" as const } },
-            { phone: { contains: sp.q } },
-            { orderNo: { contains: sp.q, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
-  };
+  // ເງື່ອນໄຂອັນດຽວກັບທີ່ປຸ່ມ “ສົ່ງອອກ CSV” ໃຊ້ — ຢູ່ `list-filters.ts`
+  const where = orderWhere(range, {
+    status: sp.status,
+    campaign: sp.campaign,
+    q: sp.q,
+  });
 
-  const [orders, allRangeOrders, campaigns, products, leads] = await Promise.all([
-    prisma.order.findMany({
-      where,
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      take: 300,
-      include: {
-        campaign: { select: { id: true, name: true } },
-        product: { select: { name: true } },
-      },
-    }),
-    prisma.order.findMany({ where: { date: dateWhere } }),
-    prisma.campaign.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.product.findMany({
-      where: { active: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.lead.findMany({
-      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      take: 200,
-      select: { id: true, name: true, phone: true },
-    }),
-  ]);
+  const [orders, matching, allRangeOrders, campaigns, products, leads] =
+    await Promise.all([
+      prisma.order.findMany({
+        where,
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        take: limit,
+        include: {
+          campaign: { select: { id: true, name: true } },
+          product: { select: { name: true } },
+        },
+      }),
+      prisma.order.count({ where }),
+      // ຍອດລວມຂ້າງເທິງນັບທັງຊ່ວງ ບໍ່ແມ່ນສະເພາະໜ້າທີ່ເປີດຢູ່ —
+      // ເອົາສະເພາະຊ່ອງເງິນທີ່ຕ້ອງໃຊ້ຄິດ ບໍ່ດຶງແຖວເຕັມມາທັງໝົດ
+      prisma.order.findMany({
+        where: { date: dateWhere },
+        select: {
+          status: true,
+          saleAmount: true,
+          productCost: true,
+          shippingCost: true,
+          otherCost: true,
+          refundAmount: true,
+        },
+      }),
+      prisma.campaign.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.product.findMany({
+        where: { active: true },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.lead.findMany({
+        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+        take: 200,
+        select: { id: true, name: true, phone: true },
+      }),
+    ]);
 
   const totals = aggregateOrders(allRangeOrders);
+
+  /** ຕົວກັ່ນຕອງທີ່ເລືອກໄວ້ ໃນຮູບແບບ query string — ໃຊ້ຮ່ວມກັບປຸ່ມສົ່ງອອກ */
+  const filterParams = () => {
+    const params = new URLSearchParams({ from: range.from, to: range.to });
+    if (validStatus) params.set("status", validStatus);
+    if (sp.campaign) params.set("campaign", sp.campaign);
+    if (sp.q) params.set("q", sp.q);
+    return params;
+  };
+  const exportHref = `/api/orders/export?${filterParams().toString()}`;
+
+  /** ລິ້ງ “ໂຫຼດເພີ່ມ” — ຮັກສາຊ່ວງວັນ ແລະ ຕົວກັ່ນຕອງທີ່ເລືອກໄວ້ */
+  const showHref = (show: number) => {
+    const params = filterParams();
+    if (sp.preset) params.set("preset", sp.preset);
+    params.set("show", String(show));
+    return `/orders?${params.toString()}`;
+  };
 
   return (
     <>
       <PageHeader
         title="Orders ແລະ ຍອດຂາຍຈິງ"
         description="ແຫຼ່ງຄວາມຈິງຂອງຍອດຂາຍ, ຕົ້ນທຶນ, ການສົ່ງສຳເລັດ ແລະຕີກັບ"
-        action={<Link href="/orders/import" className="btn">⤒ ນຳເຂົ້າ Excel / CSV</Link>}
+        action={
+          <>
+            <a href={exportHref} className="btn">
+              ⤓ ສົ່ງອອກ CSV
+            </a>
+            <Link href="/orders/import" className="btn">
+              ⤒ ນຳເຂົ້າ Excel / CSV
+            </Link>
+          </>
+        }
       />
 
       <DateRangeBar
@@ -95,7 +135,7 @@ export default async function OrdersPage({
         keep={{ status: validStatus, campaign: sp.campaign, q: sp.q }}
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <StatStrip cols={5}>
         <StatTile label="Order ທັງໝົດ" value={formatInt(totals.orders)} />
         <StatTile label="ຮັບສຳເລັດ" value={formatInt(totals.delivered)} />
         <StatTile label="ຍອດຂາຍຈິງ" value={money(totals.netRevenue)} hint="ຫຼັງຫັກເງິນຄືນ" />
@@ -105,12 +145,16 @@ export default async function OrdersPage({
           value={formatPercent(totals.returnRate, 1)}
           hint={`${formatInt(totals.returned)} Order ຕີກັບ`}
         />
-      </div>
+      </StatStrip>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_480px]">
-        <div className="grid gap-5">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_480px]">
+        <div className="grid gap-3">
           <Card>
-            <form method="get" action="/orders" className="flex flex-wrap items-end gap-3 p-3">
+            <form
+              method="get"
+              action="/orders"
+              className="filter-bar flex flex-wrap items-end gap-3 p-3"
+            >
               <input type="hidden" name="from" value={range.from} />
               <input type="hidden" name="to" value={range.to} />
               <div>
@@ -143,7 +187,10 @@ export default async function OrdersPage({
           </Card>
 
           <Card>
-            <CardHeader title="ລາຍການ Order" subtitle={`ສະແດງ ${orders.length} ລາຍການ (ສູງສຸດ 300)`} />
+            <CardHeader
+              title="ລາຍການ Order"
+              subtitle={`ພົບ ${formatInt(matching)} ລາຍການໃນຊ່ວງ ແລະ ຕົວກັ່ນຕອງທີ່ເລືອກ`}
+            />
             {orders.length === 0 ? (
               <EmptyState title="ຍັງບໍ່ມີ Order" hint="ເພີ່ມຍອດຂາຍຈິງຈາກຟອມດ້ານຂວາ" />
             ) : (
@@ -205,6 +252,14 @@ export default async function OrdersPage({
                 </table>
               </div>
             )}
+            {orders.length > 0 ? (
+              <LoadMore
+                shown={orders.length}
+                total={matching}
+                step={PAGE_SIZE}
+                href={showHref}
+              />
+            ) : null}
           </Card>
         </div>
 

@@ -587,3 +587,60 @@ model SyncLog {
   @@index([startedAt])
   @@index([status])
 }
+
+// ---------------------------------------------------------------------------
+// ຜູ້ໃຊ້ ແລະ ບັນທຶກການກະທຳ
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN // ຈັດການຜູ້ໃຊ້ ແລະ ຄ່າຕັ້ງໄດ້
+  MEMBER // ໃຊ້ງານທົ່ວໄປ
+}
+
+/// ຜູ້ໃຊ້ຂອງລະບົບ.
+///
+/// ບໍ່ມີແຖວໃດເລີຍ = ລະບົບຍັງໃຊ້ລະຫັດຜ່ານດຽວຮ່ວມກັນຈາກ `APP_PASSWORD`
+/// (ຮ້ານທີ່ຕິດຕັ້ງໄວ້ກ່ອນຈຶ່ງໃຊ້ຕໍ່ໄດ້ໂດຍບໍ່ຕ້ອງແກ້ຫຍັງ).
+/// ພໍສ້າງຜູ້ໃຊ້ຄົນທຳອິດ ລະບົບຈະບັງຄັບໃຫ້ login ດ້ວຍຊື່ + ລະຫັດແທນ.
+model User {
+  id           String   @id @default(cuid())
+  /// ຊື່ທີ່ໃຊ້ເຂົ້າລະບົບ — ຕົວພິມນ້ອຍ ບໍ່ມີຊ່ອງຫວ່າງ
+  name         String   @unique
+  /// ຊື່ທີ່ສະແດງໃນບັນທຶກການກະທຳ
+  displayName  String
+  /// PBKDF2 — ຮູບແບບ "pbkdf2$<ຮອບ>$<salt>$<hash>" (ເບິ່ງ `src/lib/password.ts`)
+  passwordHash String
+  role         UserRole @default(MEMBER)
+  /// ປິດແທນການລຶບ — ບັນທຶກການກະທຳຈະໄດ້ຍັງອ້າງເຖິງໄດ້
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@index([active])
+}
+
+/// ບັນທຶກການກະທຳທີ່ **ກູ້ຄືນບໍ່ໄດ້ ຫຼື ມີຜົນກັບເງິນ**.
+///
+/// ບໍ່ໄດ້ບັນທຶກທຸກຢ່າງ — ບັນທຶກໝົດຈະບໍ່ມີໃຜອ່ານ. ເອົາສະເພາະ:
+/// ການລຶບ, ການສັ່ງໄປ Facebook (ຢຸດ/ຍິງຕໍ່, ປ່ຽນງົບ) ແລະ ການປ່ຽນຄ່າຕັ້ງສຳຄັນ.
+model AuditLog {
+  id       String   @id @default(cuid())
+  at       DateTime @default(now())
+  userId   String?
+  /// ຊື່ຜູ້ໃຊ້ຕອນນັ້ນ — ເກັບໄວ້ຕ່າງຫາກ ເພື່ອໃຫ້ອ່ານໄດ້ເຖິງແມ່ນຜູ້ໃຊ້ຖືກລຶບ
+  userName String
+  /// ປະເພດ ເຊັ່ນ "campaign.delete", "campaign.budget", "settings.token"
+  action   String
+  /// ສິ່ງທີ່ຖືກເຮັດ — ຊື່ທີ່ຄົນອ່ານອອກ
+  target   String?
+  detail   String?
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([at])
+  @@index([userId])
+  @@index([action])
+}

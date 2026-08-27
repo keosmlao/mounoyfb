@@ -5,19 +5,39 @@ import { SubmitButton } from "@/components/SubmitButton";
 import { Field } from "@/components/ui";
 import { login } from "./actions";
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({
+  next,
+  needsName,
+}: {
+  next: string;
+  /** ມີບັນຊີຜູ້ໃຊ້ໃນລະບົບແລ້ວ — ຕ້ອງໃສ່ຊື່ນຳ */
+  needsName: boolean;
+}) {
   const [error, formAction] = useActionState(login, null);
 
   return (
     <form action={formAction} className="grid gap-4">
       <input type="hidden" name="next" value={next} />
 
+      {needsName ? (
+        <Field label="ຊື່ຜູ້ໃຊ້">
+          <input
+            name="name"
+            required
+            autoFocus
+            autoComplete="username"
+            className="field"
+            placeholder="ເຊັ່ນ noy"
+          />
+        </Field>
+      ) : null}
+
       <Field label="ລະຫັດຜ່ານ">
         <input
           name="password"
           type="password"
           required
-          autoFocus
+          autoFocus={!needsName}
           autoComplete="current-password"
           className="field"
           placeholder="••••••••"

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { num, reqStr, str } from "@/lib/form";
 import { enumVal } from "@/lib/form";
 import { EntityStatus } from "@/generated/prisma/enums";
@@ -38,7 +39,8 @@ export async function updateAdAccount(id: string, fd: FormData) {
 
 export async function deleteAdAccount(id: string) {
   await requireSession();
-  await prisma.adAccount.delete({ where: { id } });
+  const removed = await prisma.adAccount.delete({ where: { id } });
+  await recordAudit("adaccount.delete", removed.name);
   revalidatePath("/ad-accounts");
   redirect("/ad-accounts");
 }

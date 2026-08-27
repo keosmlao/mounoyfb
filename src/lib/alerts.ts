@@ -1,56 +1,36 @@
 import { prisma } from "./prisma";
-import { addDays, parseDate, formatDateLao, todayStr } from "./date";
+import { addDays, parseDate, toDateInput, formatDateLao, todayStr } from "./date";
 import { formatMoney, formatPercent, safeDiv } from "./format";
 import { loadMoney } from "./money-server";
 import { totalsScope } from "./scope";
 import { sumOrderTotals } from "./orders";
+import { getFbConfig, readTokenState } from "./fb";
+import { getAutoSync, inboxState } from "./auto-sync";
+import {
+  DEFAULT_SYNC_STALE_HOURS,
+  evaluateSyncHealth,
+  fxGapAlert,
+  missingFxDays,
+  type SpendDay,
+} from "./sync-health";
+import { sortAlerts, type Alert } from "./alert-types";
+
+export {
+  SEVERITY_ORDER,
+  SEVERITY_LABEL,
+  SEVERITY_TONE,
+  SEVERITY_ICON,
+  countActionable,
+  sortAlerts,
+  type Severity,
+  type Alert,
+} from "./alert-types";
 
 /**
  * ເຄື່ອງກວດເຕືອນ — ອ່ານຂໍ້ມູນທີ່ບັນທຶກໄວ້ ແລ້ວບອກວ່າມີຫຍັງຕ້ອງເບິ່ງ.
  * ບໍ່ໄດ້ເກັບການແຈ້ງເຕືອນລົງຖານຂໍ້ມູນ — ຄິດໃໝ່ທຸກຄັ້ງທີ່ເປີດໜ້າ
  * ຈຶ່ງບໍ່ມີບັນຫາການແຈ້ງເຕືອນເກົ່າຄ້າງຄາເມື່ອຂໍ້ມູນຖືກແກ້.
  */
-
-/** ຄວາມຮ້າຍແຮງ — ຮຽງຈາກໜັກໄປເບົາ */
-export type Severity = "critical" | "serious" | "warning" | "info";
-
-export const SEVERITY_ORDER: Record<Severity, number> = {
-  critical: 0,
-  serious: 1,
-  warning: 2,
-  info: 3,
-};
-
-export const SEVERITY_LABEL: Record<Severity, string> = {
-  critical: "ດ່ວນຫຼາຍ",
-  serious: "ຕ້ອງເບິ່ງ",
-  warning: "ລະວັງ",
-  info: "ຮັບຮູ້ໄວ້",
-};
-
-export const SEVERITY_TONE: Record<Severity, string> = {
-  critical: "danger",
-  serious: "danger",
-  warning: "warning",
-  info: "info",
-};
-
-/** ໄອຄອນຄູ່ກັບປ້າຍຄຳ — ບໍ່ໃຫ້ຄວາມໝາຍຂຶ້ນກັບສີຢ່າງດຽວ */
-export const SEVERITY_ICON: Record<Severity, string> = {
-  critical: "⛔",
-  serious: "▲",
-  warning: "⚠",
-  info: "ℹ",
-};
-
-export type Alert = {
-  id: string;
-  severity: Severity;
-  category: string;
-  title: string;
-  detail: string;
-  href?: string;
-};
 
 export type Thresholds = {
   dailyBudgetTolerancePct: number;
@@ -59,6 +39,8 @@ export type Thresholds = {
   costPerMessageMax: number;
   staleLeadDays: number;
   endingSoonDays: number;
+  /** ບໍ່ມີການດຶງສຳເລັດດົນກວ່ານີ້ (ຊົ່ວໂມງ) = ເຕືອນວ່າຂໍ້ມູນຄ້າງ */
+  syncStaleHours: number;
 };
 
 export const DEFAULT_THRESHOLDS: Thresholds = {
@@ -68,6 +50,7 @@ export const DEFAULT_THRESHOLDS: Thresholds = {
   costPerMessageMax: 0, // 0 = ປິດການກວດນີ້
   staleLeadDays: 3,
   endingSoonDays: 3,
+  syncStaleHours: DEFAULT_SYNC_STALE_HOURS,
 };
 
 export const THRESHOLD_KEYS: Record<keyof Thresholds, string> = {
@@ -77,6 +60,7 @@ export const THRESHOLD_KEYS: Record<keyof Thresholds, string> = {
   costPerMessageMax: "alertCostPerMessageMax",
   staleLeadDays: "alertStaleLeadDays",
   endingSoonDays: "alertEndingSoonDays",
+  syncStaleHours: "alertSyncStaleHours",
 };
 
 export async function getThresholds(): Promise<Thresholds> {
@@ -104,54 +88,126 @@ export async function buildAlerts(): Promise<Alert[]> {
   const yesterday = addDays(today, -1);
   const weekAgo = addDays(today, -7);
 
-  const [campaigns, accounts, yesterdayRows, weekRows, weekOrders, allTimeByCampaign, staleLeads] =
-    await Promise.all([
-      prisma.campaign.findMany({
-        where: { status: { in: ["ACTIVE", "PAUSED"] } },
-        include: { adAccount: { select: { name: true, currency: true } } },
-      }),
-      prisma.adAccount.findMany({ where: { spendCap: { not: null } } }),
-      prisma.insight.findMany({
-        where: { ...totalsScope, date: parseDate(yesterday) },
-        select: { campaignId: true, spend: true, spendLak: true },
-      }),
-      prisma.insight.groupBy({
-        by: ["campaignId"],
-        where: {
-          ...totalsScope,
-          date: { gte: parseDate(weekAgo), lte: parseDate(today) },
-        },
-        _sum: { spendLak: true, messages: true },
-      }),
-      prisma.order.findMany({
-        where: {
-          date: { gte: parseDate(weekAgo), lte: parseDate(today) },
-          campaignId: { not: null },
-        },
-        select: {
-          campaignId: true,
-          status: true,
-          saleAmount: true,
-          productCost: true,
-          shippingCost: true,
-          otherCost: true,
-          refundAmount: true,
-        },
-      }),
-      prisma.insight.groupBy({
-        by: ["campaignId", "adAccountId"],
-        where: totalsScope,
-        _sum: { spend: true },
-      }),
-      prisma.lead.count({
-        where: {
-          status: "NEW",
-          date: { lt: parseDate(addDays(today, -thresholds.staleLeadDays)) },
-        },
-      }),
-    ]);
+  // ຊ່ວງທີ່ກວດອັດຕາແລກປ່ຽນ — ບໍ່ນັບມື້ນີ້ ເພາະຍັງປ້ອນບໍ່ທັນກໍ່ບໍ່ຜິດຫຍັງ
+  const fxFrom = addDays(today, -14);
+
+  const [
+    campaigns,
+    accounts,
+    yesterdayRows,
+    weekRows,
+    weekOrders,
+    allTimeByCampaign,
+    staleLeads,
+    fbConfig,
+    autoSync,
+    inbox,
+    tokenState,
+    lastSync,
+    lastSuccess,
+    spendDayRows,
+    rateRows,
+  ] = await Promise.all([
+    prisma.campaign.findMany({
+      where: { status: { in: ["ACTIVE", "PAUSED"] } },
+      include: { adAccount: { select: { name: true, currency: true } } },
+    }),
+    prisma.adAccount.findMany({ where: { spendCap: { not: null } } }),
+    prisma.insight.findMany({
+      where: { ...totalsScope, date: parseDate(yesterday) },
+      select: { campaignId: true, spend: true, spendLak: true },
+    }),
+    prisma.insight.groupBy({
+      by: ["campaignId"],
+      where: {
+        ...totalsScope,
+        date: { gte: parseDate(weekAgo), lte: parseDate(today) },
+      },
+      _sum: { spendLak: true, messages: true },
+    }),
+    prisma.order.findMany({
+      where: {
+        date: { gte: parseDate(weekAgo), lte: parseDate(today) },
+        campaignId: { not: null },
+      },
+      select: {
+        campaignId: true,
+        status: true,
+        saleAmount: true,
+        productCost: true,
+        shippingCost: true,
+        otherCost: true,
+        refundAmount: true,
+      },
+    }),
+    prisma.insight.groupBy({
+      by: ["campaignId", "adAccountId"],
+      where: totalsScope,
+      _sum: { spend: true },
+    }),
+    prisma.lead.count({
+      where: {
+        status: "NEW",
+        date: { lt: parseDate(addDays(today, -thresholds.staleLeadDays)) },
+      },
+    }),
+    // --- ສຸຂະພາບຂອງລະບົບເອງ (token / ການດຶງ / ກ່ອງຂໍ້ຄວາມ) ---
+    getFbConfig(),
+    getAutoSync(),
+    inboxState(),
+    readTokenState(),
+    prisma.syncLog.findFirst({
+      orderBy: { startedAt: "desc" },
+      select: { status: true, startedAt: true, message: true },
+    }),
+    prisma.syncLog.findFirst({
+      where: { status: "SUCCESS" },
+      orderBy: { startedAt: "desc" },
+      select: { startedAt: true, finishedAt: true },
+    }),
+    // --- ວັນທີ່ໃຊ້ເງິນຈິງ ທຽບກັບອັດຕາແລກປ່ຽນທີ່ປ້ອນໄວ້ ---
+    prisma.insight.groupBy({
+      by: ["date", "currency"],
+      where: {
+        ...totalsScope,
+        date: { gte: parseDate(fxFrom), lte: parseDate(yesterday) },
+        spend: { gt: 0 },
+      },
+    }),
+    prisma.exchangeRate.findMany({
+      where: { date: { gte: parseDate(fxFrom), lte: parseDate(yesterday) } },
+      select: { date: true, currency: true },
+    }),
+  ]);
 
   const alerts: Alert[] = [];
+
+  // 0) ສຸຂະພາບຂອງລະບົບເອງ — ຕ້ອງກວດກ່ອນໝູ່ ເພາະຖ້າການດຶງພັງ
+  //    ຕົວເລກທຸກອັນຂ້າງລຸ່ມນີ້ກໍ່ເປັນຂອງເກົ່າ ແລ້ວຄຳເຕືອນອື່ນຈະພາຄິດຜິດ
+  alerts.push(
+    ...evaluateSyncHealth({
+      connected: fbConfig !== null,
+      autoSyncEnabled: autoSync.enabled,
+      lastSync,
+      // ຮອບທີ່ສຳເລັດແລ້ວຕ້ອງມີ finishedAt — ເອົາ startedAt ກັນໄວ້ເສີຍໆ
+      lastSuccessAt: lastSuccess?.finishedAt ?? lastSuccess?.startedAt ?? null,
+      token: tokenState,
+      inboxEnabled: inbox.settings.enabled,
+      inboxError: inbox.error,
+      staleHours: thresholds.syncStaleHours,
+      now: new Date(),
+    }),
+  );
+
+  // 0b) ວັນທີ່ໃຊ້ເງິນຈິງ ແຕ່ບໍ່ໄດ້ປ້ອນອັດຕາແລກປ່ຽນ — ຍອດກີບຈະເພື້ອນຢ່າງງຽບໆ
+  const toSpendDay = (r: { date: Date; currency: string }): SpendDay => ({
+    date: toDateInput(r.date),
+    currency: r.currency,
+  });
+  const fxAlert = fxGapAlert(
+    missingFxDays(spendDayRows.map(toSpendDay), rateRows.map(toSpendDay)),
+  );
+  if (fxAlert) alerts.push(fxAlert);
 
   const yesterdayByCampaign = new Map<string, number>();
   for (const row of yesterdayRows) {
@@ -347,16 +403,5 @@ export async function buildAlerts(): Promise<Alert[]> {
     });
   }
 
-  alerts.sort(
-    (a, b) =>
-      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-      a.title.localeCompare(b.title),
-  );
-
-  return alerts;
-}
-
-/** ນັບການແຈ້ງເຕືອນທີ່ຕ້ອງລົງມືເຮັດ (ບໍ່ນັບລະດັບ “ຮັບຮູ້ໄວ້”) */
-export function countActionable(alerts: Alert[]): number {
-  return alerts.filter((a) => a.severity !== "info").length;
+  return sortAlerts(alerts);
 }

@@ -1,6 +1,8 @@
-import { TopNav } from "@/components/TopNav";
+import { SideNav } from "@/components/SideNav";
 import { buildAlerts, countActionable } from "@/lib/alerts";
 import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import { currentUser, isAuthenticated } from "@/lib/auth-server";
 
 /** ນັບການແຈ້ງເຕືອນໃສ່ເມນູ — ຖ້າຖານຂໍ້ມູນຍັງບໍ່ພ້ອມ ໃຫ້ສະແດງໜ້າໄດ້ຕາມປົກກະຕິ */
 async function alertBadgeCount(): Promise<number> {
@@ -33,16 +35,27 @@ export default async function AppLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [alertCount, inboxCount] = await Promise.all([
+  // ດ່ານທີສອງຫຼັງ `proxy.ts` — ບ່ອນນີ້ຮູ້ຈັກຖານຂໍ້ມູນ ຈຶ່ງກວດໄດ້ວ່າ
+  // ບັນຊີຍັງເປີດຢູ່ບໍ່ (ຄົນທີ່ຖືກປິດຕ້ອງອອກທັນທີ ບໍ່ແມ່ນລໍ cookie ໝົດອາຍຸ)
+  if (!(await isAuthenticated())) redirect("/login");
+
+  const [alertCount, inboxCount, me] = await Promise.all([
     alertBadgeCount(),
     inboxBadgeCount(),
+    currentUser(),
   ]);
 
   return (
-    <div className="app-shell flex min-h-dvh flex-col">
-      <TopNav alertCount={alertCount} inboxCount={inboxCount} />
-      <main className="min-w-0 flex-1 px-3 pb-24 pt-4 sm:px-5 lg:px-6 lg:pb-10 lg:pt-6">
-        <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+    // ຄອມ: ເນື້ອຫາເລີ່ມຫຼັງແຖບຂ້າງ · ມືຖື: ເຕັມຈໍ ແລ້ວເວັ້ນລຸ່ມໃຫ້ແຖບນຳທາງ
+    <div className="app-shell min-h-dvh lg:pl-[var(--rail)]">
+      <SideNav
+        alertCount={alertCount}
+        inboxCount={inboxCount}
+        userName={me?.displayName ?? null}
+      />
+      {/* ບໍ່ຈຳກັດຄວາມກວ້າງ — ຈໍກວ້າງເທົ່າໃດ ກໍ່ໃຫ້ຕາຕະລາງໃຊ້ໄດ້ໝົດ */}
+      <main className="min-w-0 px-2 pb-24 pt-3 sm:px-3 lg:px-3 lg:pb-5 lg:pt-3">
+        {children}
       </main>
     </div>
   );

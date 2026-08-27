@@ -38,7 +38,7 @@ export default async function FbPagesPage() {
         pages_read_user_content, pages_manage_engagement ແລະ pages_messaging.
       </p>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardHeader title="ລາຍການເພຈ" subtitle={`ທັງໝົດ ${pages.length} ເພຈ`} />
           {pages.length === 0 ? (
@@ -98,7 +98,7 @@ export default async function FbPagesPage() {
 
         <Card className="h-fit">
           <CardHeader title="ເພີ່ມເພຈໃໝ່" />
-          <form action={createFbPage} className="grid gap-4 p-4">
+          <form action={createFbPage} className="grid gap-3 p-3">
             <Field label="ຊື່ເພຈ *">
               <input name="name" required className="field" placeholder="Odien Maall" />
             </Field>

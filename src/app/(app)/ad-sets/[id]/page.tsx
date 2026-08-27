@@ -63,8 +63,8 @@ export default async function AdSetDetailPage({
         }
       />
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="grid gap-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="grid gap-3">
           <Card>
             <CardHeader
               title="ໂຄສະນາ (Ads)"
@@ -126,7 +126,7 @@ export default async function AdSetDetailPage({
 
           <Card>
             <CardHeader title="ຂໍ້ມູນຊຸດໂຄສະນາ" />
-            <form action={update} className="grid gap-4 p-4 sm:grid-cols-2">
+            <form action={update} className="grid gap-3 p-3 sm:grid-cols-2">
               <Field label="ຊື່ຊຸດ *" className="sm:col-span-2">
                 <input name="name" required defaultValue={adSet.name} className="field" />
               </Field>
@@ -232,7 +232,7 @@ export default async function AdSetDetailPage({
 
         <Card className="h-fit">
           <CardHeader title="ເພີ່ມໂຄສະນາ" />
-          <form action={addAd} className="grid gap-4 p-4">
+          <form action={addAd} className="grid gap-3 p-3">
             <Field label="ຊື່ໂຄສະນາ *">
               <input name="name" required className="field" placeholder="ວິດີໂອຮີວິວ 30 ວິ" />
             </Field>

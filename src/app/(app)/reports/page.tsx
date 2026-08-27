@@ -45,7 +45,7 @@ export default async function ReportsPage({
         keep={{ by: groupBy }}
       />
 
-      <div className="mb-5 flex flex-wrap gap-1.5">
+      <div className="mb-3 flex flex-wrap gap-1.5">
         {(Object.keys(GROUP_BYS) as GroupBy[]).map((key) => (
           <Link
             key={key}

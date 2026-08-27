@@ -49,6 +49,16 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ໄລຍະຫ່າງນັບຈາກ `SyncLog.startedAt` ຫຼ້າສຸດ **ບໍ່ວ່າຄົນກົດ ຫຼື ອັດຕະໂນມັດ**.
   ຖ້າຈະ deploy ຫຼາຍ instance ຕ້ອງຄິດເລື່ອງນີ້ຄືນ (ດຽວນີ້ກັນຊ້ອນດ້ວຍ
   partial unique index ຂອງແຖວ RUNNING).
+- **`buildAlerts()` ຫ້າມຮ້ອງ Facebook** — ມັນຖືກເອີ້ນທຸກຄັ້ງທີ່ເປີດໜ້າ.
+  ອາຍຸ token ຖືກກວດເບື້ອງຫຼັງທຸກ 6 ຊົ່ວໂມງ (`checkFbToken()` ໃນ `fb.ts`)
+  ແລ້ວເກັບໄວ້ `AppSetting.fbToken*` — ໜ້າຈໍອ່ານແຕ່ຄ່າທີ່ເກັບໄວ້.
+- **`src/lib/sync-health.ts` ຕ້ອງບໍລິສຸດ** (ຫ້າມ import prisma) — ກົດເຕືອນ
+  ເລື່ອງ token/ການດຶງ/ຂໍ້ມູນຄ້າງ ຢູ່ໃນນັ້ນ ແລະ ມີ test ຄຸມ. ການອ່ານຖານຂໍ້ມູນ
+  ຢູ່ `alerts.ts` ແລ້ວສົ່ງຄ່າເຂົ້າໄປ. ຖ້າ token ພັງ **ຫ້າມເຕືອນຊ້ຳ**
+  ວ່າ "ດຶງລົ້ມ" ແລະ "ຂໍ້ມູນຄ້າງ" — ບອກຕົ້ນເຫດອັນດຽວ.
+- **ລາຍການທີ່ຍາວໃຊ້ `?show=` ບໍ່ແມ່ນຕັດແຖວຖິ້ມ** — `/orders`, `/leads`,
+  `/inbox` ໂຫຼດເພີ່ມເທື່ອລະ 100 ຜ່ານ `<LoadMore>` ພ້ອມນັບຍອດຈິງດ້ວຍ `count()`.
+  ຢ່າໃສ່ `take:` ຄົງທີ່ແລ້ວບອກແຕ່ "ສູງສຸດ N" — ອັນເກົ່າກວ່ານັ້ນຈະເປີດເບິ່ງບໍ່ໄດ້.
 - **ກ່ອງຂໍ້ຄວາມໃຊ້ token ຄົນລະໜ່ວຍກັບຝັ່ງໂຄສະນາ** — comment/ແຊັດ ຕ້ອງໃຊ້
   *page token* ຂອງແຕ່ລະເພຈ (`FbPage.token`, ດຶງດ້ວຍ `syncPageTokens()`)
   ບໍ່ແມ່ນ token ຫຼັກໃນ `AppSetting`. **ຫ້າມສົ່ງ `FbPage.token` ອອກໜ້າຈໍ**.
@@ -56,4 +66,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `creative{effective_object_story_id}` ຂອງ ad (`pullAdPosts` ໃນ `fb-inbox.ts`).
 - **`handled` / `leadId` ຂອງ comment ແລະ ແຊັດ ເປັນຂອງຄົນ** — ຮອບດຶງທັບໄດ້ແຕ່
   ຂໍ້ມູນທີ່ມາຈາກ Facebook (ຂໍ້ຄວາມ, ຈຳນວນໄລຄ໌, ສະຖານະເຊື່ອງ) ຫ້າມທັບສະຖານະວຽກ.
+- **ຊ່ອງຂອງແຄມເປນທີ່ຜູກ FB ແບ່ງເປັນ 3 ພວກ** — ສົ່ງໄປ Facebook ໄດ້ (ຊື່, ງົບ),
+  Facebook ເປັນເຈົ້າຂອງແຕ່ແກ້ບໍ່ໄດ້ (ເປົ້າໝາຍ, ວັນ, ສະຖານະ) ແລະ ຂອງເຮົາເອງ.
+  ຫ້າມໃຫ້ຟອມແກ້ພວກທີ 2 ໄດ້ — ຮອບ sync ຈະທັບຖິ້ມແລ້ວຄົນຈະບໍ່ຮູ້ຕົວ.
+  ພວກທີ 1 ຕ້ອງສົ່ງໄປ Facebook **ກ່ອນ** ບັນທຶກ ຖ້າລົ້ມແມ່ນບໍ່ບັນທຶກຫຍັງເລີຍ.
+- **ການຮ້ອງ Graph API ຜ່ານ `graphFetch()` ສະເໝີ** — ມັນລອງໃໝ່ໃຫ້ເມື່ອຊົນ
+  rate limit (code 1/2/4/17/32/341/613). ຢ່າຮ້ອງ `fetch` ໃສ່ Graph ໂດຍກົງ.
+- **Webhook ບໍ່ໄດ້ຂຽນຂໍ້ມູນເອງ** — ມັນກວດລາຍເຊັນແລ້ວສັ່ງໃຫ້ `syncInbox()`
+  ດຶງເອງ. ຢ່າສ້າງເສັ້ນທາງຂຽນທີສອງຈາກ payload ຂອງ webhook.
+- **ບັນຊີຜູ້ໃຊ້ເປັນທາງເລືອກ** — ບໍ່ມີແຖວໃນ `User` = ໃຊ້ `APP_PASSWORD` ຮ່ວມກັນ
+  ຄືເກົ່າ · ມີແລ້ວ = ບັງຄັບ login ດ້ວຍຊື່+ລະຫັດ ແລະ session ແບບລະຫັດຮ່ວມໃຊ້ບໍ່ໄດ້ອີກ.
+  `proxy.ts` ກວດໄດ້ແຕ່ລາຍເຊັນ — ການກວດວ່າ**ບັນຊີຍັງເປີດຢູ່**ຢູ່ `isAuthenticated()`
+  ແລະ `(app)/layout.tsx`. `password.ts` ຫ້າມ import ຈາກ proxy ຫຼື client.
+- **ເງື່ອນໄຂກັ່ນຕອງລາຍການຢູ່ `list-filters.ts` ບ່ອນດຽວ** — ໜ້າຈໍກັບໄຟລ໌ CSV
+  ທີ່ສົ່ງອອກຕ້ອງໄດ້ແຖວອັນດຽວກັນ. `toCsv()` ໃສ່ BOM ໃຫ້ ບໍ່ດັ່ງນັ້ນ Excel
+  ອ່ານພາສາລາວເປັນຕົວຂີ້ເຫຍື້ອ.
 - **ຢ່າ deploy ອອກອິນເຕີເນັດແບບ http** — ຕັ້ງ `COOKIE_SECURE=1` ພ້ອມ HTTPS ກ່ອນ.

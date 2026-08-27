@@ -145,11 +145,11 @@ export default async function CampaignsPage({
         keep={{ account: sp.account, status: sp.status, q: sp.q }}
       />
 
-      <Card className="mb-5">
+      <Card className="mb-3">
         <form
           method="get"
           action="/campaigns"
-          className="flex flex-wrap items-end gap-3 p-3"
+          className="filter-bar flex flex-wrap items-end gap-3 p-3"
         >
           <input type="hidden" name="from" value={range.from} />
           <input type="hidden" name="to" value={range.to} />

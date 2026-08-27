@@ -4,9 +4,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-server";
+import { recordAudit } from "@/lib/audit";
 import { date, enumVal, num, reqStr, str } from "@/lib/form";
 import { CampaignObjective, EntityStatus } from "@/generated/prisma/enums";
-import { explainFbError, getFbConfig, setFbRunStatus } from "@/lib/fb";
+import {
+  explainFbError,
+  getFbConfig,
+  setFbRunStatus,
+  updateFbCampaign,
+  type FbCampaignEdit,
+} from "@/lib/fb";
 
 const STATUSES = Object.values(EntityStatus);
 const OBJECTIVES = Object.values(CampaignObjective);
@@ -39,9 +46,84 @@ export async function createCampaign(fd: FormData) {
   redirect(`/campaigns/${campaign.id}`);
 }
 
+/**
+ * ບັນທຶກການແກ້ໄຂແຄມເປນ.
+ *
+ * ສຳລັບແຄມເປນທີ່ຜູກກັບ Facebook ຊ່ອງຕ່າງໆແບ່ງເປັນ 3 ພວກ:
+ *
+ * 1. **ສົ່ງໄປ Facebook** (ຊື່, ງົບຕໍ່ວັນ, ງົບລວມ) — ສົ່ງກ່ອນ ຖ້າ Facebook
+ *    ປະຕິເສດຈະບໍ່ບັນທຶກຫຍັງເລີຍ. ບໍ່ດັ່ງນັ້ນໜ້າຈໍຈະບອກງົບໃໝ່ ທັງທີ່
+ *    Facebook ຍັງຕັດເງິນຕາມງົບເກົ່າ ແລ້ວຮອບ sync ຖັດໄປກໍ່ທັບຄ່າເຮົາຖິ້ມ.
+ * 2. **Facebook ເປັນເຈົ້າຂອງ ແຕ່ແກ້ບໍ່ໄດ້** (ເປົ້າໝາຍ, ວັນເລີ່ມ/ຈົບ, ສະຖານະ) —
+ *    ບໍ່ຮັບຄ່າຈາກຟອມ ໃຊ້ຄ່າເກົ່າຕໍ່. ຟອມລັອກໄວ້ຢູ່ແລ້ວ ແຕ່ຢ່າເຊື່ອຟອມ.
+ *    (ຢຸດ/ຍິງຕໍ່ ໃຊ້ປຸ່ມ `RunToggle` ຊຶ່ງສັ່ງໄປ Facebook ໃຫ້ຖືກຕ້ອງ)
+ * 3. **ຂອງລະບົບເຮົາເອງ** (ຜູ້ຮັບຜິດຊອບ, ໝາຍເຫດ, ເພຈ, ສິນຄ້າ) — ບັນທຶກປົກກະຕິ
+ *    ເພາະຮອບ sync ບໍ່ໄດ້ແຕະຊ່ອງເຫຼົ່ານີ້.
+ */
 export async function updateCampaign(id: string, fd: FormData) {
   await requireSession();
-  await prisma.campaign.update({ where: { id }, data: readCampaign(fd) });
+
+  const existing = await prisma.campaign.findUnique({
+    where: { id },
+    select: {
+      fbCampaignId: true,
+      name: true,
+      dailyBudget: true,
+      lifetimeBudget: true,
+      objective: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      adAccount: { select: { currency: true } },
+    },
+  });
+  if (!existing) throw new Error("ບໍ່ພົບແຄມເປນນີ້ແລ້ວ");
+
+  const input = readCampaign(fd);
+
+  if (existing.fbCampaignId) {
+    // ພວກທີ 2 — ຮັກສາຄ່າເກົ່າໄວ້
+    input.objective = existing.objective;
+    input.status = existing.status;
+    input.startDate = existing.startDate;
+    input.endDate = existing.endDate;
+
+    // ພວກທີ 1 — ສົ່ງສະເພາະອັນທີ່ປ່ຽນຈິງ
+    const push: FbCampaignEdit = {};
+    if (input.name !== existing.name) push.name = input.name;
+    if (input.dailyBudget !== existing.dailyBudget) {
+      push.dailyBudget = input.dailyBudget;
+    }
+    if (input.lifetimeBudget !== existing.lifetimeBudget) {
+      push.lifetimeBudget = input.lifetimeBudget;
+    }
+
+    if (Object.keys(push).length > 0) {
+      if (!(await getFbConfig())) {
+        throw new Error(
+          "ແຄມເປນນີ້ຜູກກັບ Facebook — ຕ້ອງໃສ່ access token ຢູ່ໜ້າຕັ້ງຄ່າກ່ອນ ຈຶ່ງແກ້ຊື່ ຫຼື ງົບໄດ້",
+        );
+      }
+      try {
+        await updateFbCampaign(
+          existing.fbCampaignId,
+          push,
+          existing.adAccount.currency,
+        );
+      } catch (error) {
+        throw new Error(explainFbError(error));
+      }
+    }
+  }
+
+  await prisma.campaign.update({ where: { id }, data: input });
+  if (existing.fbCampaignId) {
+    await recordAudit(
+      "campaign.update",
+      input.name,
+      `ງົບ/ວັນ: ${existing.dailyBudget ?? "—"} → ${input.dailyBudget ?? "—"}`,
+    );
+  }
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
   redirect(`/campaigns/${id}`);
@@ -49,7 +131,12 @@ export async function updateCampaign(id: string, fd: FormData) {
 
 export async function deleteCampaign(id: string) {
   await requireSession();
-  await prisma.campaign.delete({ where: { id } });
+  const campaign = await prisma.campaign.delete({ where: { id } });
+  await recordAudit(
+    "campaign.delete",
+    campaign.name,
+    "ລຶບພ້ອມຊຸດ, ໂຄສະນາ ແລະ ຜົນລາຍວັນທັງໝົດ",
+  );
   revalidatePath("/campaigns");
   redirect("/campaigns");
 }
@@ -69,9 +156,10 @@ export async function toggleCampaignStatus(id: string, next: EntityStatus) {
 
   const campaign = await prisma.campaign.findUnique({
     where: { id },
-    select: { fbCampaignId: true },
+    select: { fbCampaignId: true, name: true },
   });
   if (!campaign) throw new Error("ບໍ່ພົບແຄມເປນນີ້ແລ້ວ");
+  const campaignName = campaign.name;
 
   // ສະເພາະ ຢຸດ/ຍິງຕໍ່ ເທົ່ານັ້ນທີ່ Facebook ຮັບ — ສະຖານະອື່ນເປັນຂອງລະບົບເຮົາເອງ
   const runStatus =
@@ -86,6 +174,11 @@ export async function toggleCampaignStatus(id: string, next: EntityStatus) {
   }
 
   await prisma.campaign.update({ where: { id }, data: { status: next } });
+  await recordAudit(
+    "campaign.status",
+    campaignName,
+    campaign.fbCampaignId ? `${next} (ສັ່ງໄປ Facebook ນຳ)` : String(next),
+  );
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${id}`);
   revalidatePath("/");
@@ -150,6 +243,7 @@ export async function updateAdSet(id: string, fd: FormData) {
 export async function deleteAdSet(id: string) {
   await requireSession();
   const adSet = await prisma.adSet.delete({ where: { id } });
+  await recordAudit("adset.delete", adSet.name);
   revalidatePath(`/campaigns/${adSet.campaignId}`);
   redirect(`/campaigns/${adSet.campaignId}`);
 }
@@ -188,6 +282,7 @@ export async function updateAd(id: string, fd: FormData) {
 export async function deleteAd(id: string) {
   await requireSession();
   const ad = await prisma.ad.delete({ where: { id } });
+  await recordAudit("ad.delete", ad.name);
   revalidatePath(`/ad-sets/${ad.adSetId}`);
   redirect(`/ad-sets/${ad.adSetId}`);
 }

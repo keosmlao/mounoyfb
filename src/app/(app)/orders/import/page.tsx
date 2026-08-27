@@ -13,7 +13,7 @@ export default async function ImportOrdersPage() {
     <>
       <PageHeader
         title="ນຳເຂົ້າຍອດຂາຍ"
-        description="ເອົາຂໍ້ມູນການຂາຍເກົ່າຈາກ Excel / Google Sheets ເຂົ້າລະບົບເທື່ອດຽວ"
+        description="ເອົາຂໍ້ມູນການຂາຍເກົ່າຈາກ Excel / Google Sheets ເຂົ້າລະບົບເທື່ອດຽວ — ບັນທຶກເປັນ CSV ກ່ອນ ຫຼື ຄັດລອກຕາຕະລາງມາວາງ"
         action={
           <Link href="/orders" className="btn">
             ກັບໄປໜ້າ Order

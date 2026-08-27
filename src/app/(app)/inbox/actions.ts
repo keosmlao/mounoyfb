@@ -14,7 +14,8 @@ import {
   syncPageTokens,
 } from "@/lib/fb-inbox";
 import { explainFbError } from "@/lib/fb";
-import { todayStr, parseDate } from "@/lib/date";
+import { todayStr, parseDate, daysAgo } from "@/lib/date";
+import { findMatchingLead, type LeadCandidate } from "@/lib/lead-match";
 
 /** ດຶງກ່ອງຂໍ້ຄວາມດຽວນີ້ — ລໍຈົນຈົບ ເພາະ 1 ຮອບໃຊ້ເວລາບໍ່ດົນ */
 export async function pullInboxNow() {
@@ -100,6 +101,25 @@ export async function setThreadHandled(threadId: string, handled: boolean) {
  * ເຮັດຄົນທີ່ທັກ/comment ໃຫ້ເປັນ “ລູກຄ້າ” ໃນລະບົບ.
  * ຜູກກັບແຄມເປນທີ່ໂພສນັ້ນຍິງຢູ່ໃຫ້ເລີຍ ຈຶ່ງຮູ້ວ່າລູກຄ້າຄົນນີ້ມາຈາກໂຄສະນາໃດ.
  */
+/**
+ * ຫາລູກຄ້າເກົ່າທີ່ແມ່ນຄົນດຽວກັນ — ເບິ່ງຍ້ອນຫຼັງ 180 ວັນ.
+ * ເກົ່າກວ່ານັ້ນຖືວ່າເປັນລູກຄ້າຄົນລະຮອບ ຄວນນັບເປັນລາຍໃໝ່.
+ */
+const LEAD_MATCH_DAYS = 180;
+
+async function existingLeadFor(person: {
+  fbName: string | null;
+  phone?: string | null;
+}): Promise<LeadCandidate | null> {
+  const candidates = await prisma.lead.findMany({
+    where: { createdAt: { gte: daysAgo(LEAD_MATCH_DAYS) } },
+    orderBy: { date: "desc" },
+    take: 500,
+    select: { id: true, name: true, fbName: true, phone: true },
+  });
+  return findMatchingLead(person, candidates);
+}
+
 export async function createLeadFromComment(commentId: string) {
   await requireSession();
   const comment = await prisma.fbComment.findUnique({
@@ -109,16 +129,21 @@ export async function createLeadFromComment(commentId: string) {
   if (!comment) throw new Error("ບໍ່ພົບ comment ນີ້ແລ້ວ");
   if (comment.leadId) return;
 
-  const lead = await prisma.lead.create({
-    data: {
-      date: parseDate(todayStr()),
-      name: comment.fromName ?? "ບໍ່ຮູ້ຊື່",
-      fbName: comment.fromName,
-      channel: "Comment",
-      campaignId: comment.post.campaignId,
-      note: comment.message,
-    },
-  });
+  // ຄົນນີ້ເຄີຍເປັນລູກຄ້າແລ້ວບໍ່ — ຜູກໃສ່ແຖວເກົ່າ ດີກວ່າສ້າງຄົນຊ້ຳ
+  const matched = await existingLeadFor({ fbName: comment.fromName });
+
+  const lead =
+    matched ??
+    (await prisma.lead.create({
+      data: {
+        date: parseDate(todayStr()),
+        name: comment.fromName ?? "ບໍ່ຮູ້ຊື່",
+        fbName: comment.fromName,
+        channel: "Comment",
+        campaignId: comment.post.campaignId,
+        note: comment.message,
+      },
+    }));
 
   await prisma.fbComment.update({
     where: { id: comment.id },
@@ -135,15 +160,20 @@ export async function createLeadFromThread(threadId: string) {
   if (!thread) throw new Error("ບໍ່ພົບຫ້ອງແຊັດນີ້ແລ້ວ");
   if (thread.leadId) return;
 
-  const lead = await prisma.lead.create({
-    data: {
-      date: parseDate(todayStr()),
-      name: thread.personName ?? "ບໍ່ຮູ້ຊື່",
-      fbName: thread.personName,
-      channel: "Messenger",
-      note: thread.snippet,
-    },
-  });
+  // ຄົນທີ່ comment ໄວ້ແລ້ວມາທັກແຊັດຕໍ່ ແມ່ນຄົນດຽວກັນ — ຢ່ານັບສອງ
+  const matched = await existingLeadFor({ fbName: thread.personName });
+
+  const lead =
+    matched ??
+    (await prisma.lead.create({
+      data: {
+        date: parseDate(todayStr()),
+        name: thread.personName ?? "ບໍ່ຮູ້ຊື່",
+        fbName: thread.personName,
+        channel: "Messenger",
+        note: thread.snippet,
+      },
+    }));
 
   await prisma.fbThread.update({
     where: { id: thread.id },

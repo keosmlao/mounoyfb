@@ -2,8 +2,9 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
-import { StatTile } from "@/components/StatTile";
+import { StatStrip, StatTile } from "@/components/StatTile";
 import { DateRangeBar } from "@/components/DateRangeBar";
+import { LoadMore } from "@/components/LoadMore";
 import { createLead, setLeadStatus } from "./actions";
 import { formatDateLao, parseDate, resolveRange, todayStr } from "@/lib/date";
 import { formatInt, formatPercent, safeDiv } from "@/lib/format";
@@ -14,6 +15,7 @@ import {
   options,
 } from "@/lib/labels";
 import type { LeadStatus } from "@/generated/prisma/enums";
+import { leadWhere } from "@/lib/list-filters";
 import { loadMoney } from "@/lib/money-server";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,13 @@ type Search = {
   preset?: string;
   status?: string;
   campaign?: string;
+  /** ຄົ້ນຫາຕາມຊື່ / ເບີໂທ / ຊື່ໃນ Facebook */
+  q?: string;
+  /** ຈຳນວນທີ່ສະແດງ (ໂຫຼດເພີ່ມເທື່ອລະ 100) */
+  show?: string;
 };
+
+const PAGE_SIZE = 100;
 
 export default async function LeadsPage({
   searchParams,
@@ -35,22 +43,28 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const range = resolveRange(sp);
 
-  const where = {
-    date: { gte: parseDate(range.from), lte: parseDate(range.to) },
-    ...(sp.status ? { status: sp.status as LeadStatus } : {}),
-    ...(sp.campaign ? { campaignId: sp.campaign } : {}),
-  };
+  // ເພດານ 2000 ໄວ້ກັນຄົນແກ້ ?show= ໃນ URL ຈົນດຶງທັງຖານຂໍ້ມູນອອກມາ
+  const limit = Math.min(Number(sp.show) || PAGE_SIZE, 2000);
+  const search = sp.q?.trim();
 
-  const [leads, campaigns, products, statusCounts] = await Promise.all([
+  // ເງື່ອນໄຂອັນດຽວກັບທີ່ປຸ່ມ “ສົ່ງອອກ CSV” ໃຊ້ — ຢູ່ `list-filters.ts`
+  const where = leadWhere(range, {
+    status: sp.status,
+    campaign: sp.campaign,
+    q: search,
+  });
+
+  const [leads, matching, campaigns, products, statusCounts] = await Promise.all([
     prisma.lead.findMany({
       where,
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-      take: 200,
+      take: limit,
       include: {
         campaign: { select: { id: true, name: true } },
         product: { select: { name: true } },
       },
     }),
+    prisma.lead.count({ where }),
     prisma.campaign.findMany({
       orderBy: { name: "asc" },
       select: { id: true, name: true },
@@ -74,21 +88,44 @@ export default async function LeadsPage({
   const won = countOf("WON");
   const wonAmount = statusCounts.find((r) => r.status === "WON")?._sum.amount ?? 0;
 
+  /** ຕົວກັ່ນຕອງທີ່ເລືອກໄວ້ ໃນຮູບແບບ query string — ໃຊ້ຮ່ວມກັບປຸ່ມສົ່ງອອກ */
+  const filterParams = () => {
+    const params = new URLSearchParams({ from: range.from, to: range.to });
+    if (sp.status) params.set("status", sp.status);
+    if (sp.campaign) params.set("campaign", sp.campaign);
+    if (search) params.set("q", search);
+    return params;
+  };
+  const exportHref = `/api/leads/export?${filterParams().toString()}`;
+
+  /** ລິ້ງ “ໂຫຼດເພີ່ມ” — ຮັກສາຊ່ວງວັນ ແລະ ຕົວກັ່ນຕອງທີ່ເລືອກໄວ້ */
+  const showHref = (show: number) => {
+    const params = filterParams();
+    if (sp.preset) params.set("preset", sp.preset);
+    params.set("show", String(show));
+    return `/leads?${params.toString()}`;
+  };
+
   return (
     <>
       <PageHeader
         title="ລູກຄ້າຈາກໂຄສະນາ"
         description="ຕິດຕາມຄົນທີ່ທັກເຂົ້າມາ ຈົນເຖິງປິດການຂາຍ"
+        action={
+          <a href={exportHref} className="btn">
+            ⤓ ສົ່ງອອກ CSV
+          </a>
+        }
       />
 
       <DateRangeBar
         basePath="/leads"
         range={range}
         activePreset={sp.preset}
-        keep={{ status: sp.status, campaign: sp.campaign }}
+        keep={{ status: sp.status, campaign: sp.campaign, q: search }}
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <StatStrip cols={4}>
         <StatTile label="ລູກຄ້າທັງໝົດ" value={formatInt(total)} hint="ໃນຊ່ວງທີ່ເລືອກ" />
         <StatTile
           label="ຍັງບໍ່ໄດ້ຕິດຕໍ່"
@@ -101,18 +138,27 @@ export default async function LeadsPage({
           hint={`ອັດຕາປິດ ${formatPercent(safeDiv(won, total), 1)}`}
         />
         <StatTile label="ຍອດຂາຍລວມ" value={money(wonAmount)} hint="ຈາກລູກຄ້າທີ່ປິດແລ້ວ" />
-      </div>
+      </StatStrip>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="grid gap-5">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-3">
           <Card>
             <form
               method="get"
               action="/leads"
-              className="flex flex-wrap items-end gap-3 p-3"
+              className="filter-bar flex flex-wrap items-end gap-3 p-3"
             >
               <input type="hidden" name="from" value={range.from} />
               <input type="hidden" name="to" value={range.to} />
+              <div>
+                <label className="label">ຄົ້ນຫາ</label>
+                <input
+                  name="q"
+                  defaultValue={search ?? ""}
+                  className="field"
+                  placeholder="ຊື່, ເບີໂທ, ຊື່ໃນ FB"
+                />
+              </div>
               <div>
                 <label className="label">ສະຖານະ</label>
                 <select name="status" defaultValue={sp.status ?? ""} className="field">
@@ -142,7 +188,7 @@ export default async function LeadsPage({
               <button type="submit" className="btn">
                 ກັ່ນຕອງ
               </button>
-              {sp.status || sp.campaign ? (
+              {sp.status || sp.campaign || search ? (
                 <Link href="/leads" className="btn btn-sm">
                   ລ້າງ
                 </Link>
@@ -153,12 +199,16 @@ export default async function LeadsPage({
           <Card>
             <CardHeader
               title="ລາຍຊື່ລູກຄ້າ"
-              subtitle={`ສະແດງ ${leads.length} ລາຍການ (ສູງສຸດ 200)`}
+              subtitle={`ພົບ ${formatInt(matching)} ຄົນ ໃນຊ່ວງ ແລະ ຕົວກັ່ນຕອງທີ່ເລືອກ`}
             />
             {leads.length === 0 ? (
               <EmptyState
                 title="ບໍ່ພົບລູກຄ້າ"
-                hint="ເພີ່ມລູກຄ້າຢູ່ຟອມທາງຂວາ ຫຼື ຂະຫຍາຍຊ່ວງວັນ"
+                hint={
+                  search
+                    ? `ບໍ່ພົບໃຜທີ່ກົງກັບ “${search}” — ລອງຂະຫຍາຍຊ່ວງວັນ ຫຼື ລ້າງຕົວກັ່ນຕອງ`
+                    : "ເພີ່ມລູກຄ້າຢູ່ຟອມທາງຂວາ ຫຼື ຂະຫຍາຍຊ່ວງວັນ"
+                }
               />
             ) : (
               <div className="table-wrap max-h-[36rem] overflow-y-auto">
@@ -238,12 +288,20 @@ export default async function LeadsPage({
                 </table>
               </div>
             )}
+            {leads.length > 0 ? (
+              <LoadMore
+                shown={leads.length}
+                total={matching}
+                step={PAGE_SIZE}
+                href={showHref}
+              />
+            ) : null}
           </Card>
         </div>
 
         <Card className="h-fit">
           <CardHeader title="ເພີ່ມລູກຄ້າ" />
-          <form action={createLead} className="grid gap-4 p-4">
+          <form action={createLead} className="grid gap-3 p-3">
             <Field label="ວັນທີ່ *">
               <input
                 name="date"

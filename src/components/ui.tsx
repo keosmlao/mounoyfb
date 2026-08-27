@@ -27,11 +27,13 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="card-header flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] px-4 py-3">
+    <div className="card-header flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
       <div className="min-w-0">
-        <h2 className="text-[0.925rem] font-semibold">{title}</h2>
+        <h2 className="text-[0.85rem] font-semibold leading-tight">{title}</h2>
         {subtitle ? (
-          <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{subtitle}</p>
+          <p className="text-[0.72rem] leading-snug text-[var(--fg-muted)]">
+            {subtitle}
+          </p>
         ) : null}
       </div>
       {action}
@@ -49,15 +51,17 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="page-header mb-4 flex flex-wrap items-center justify-between gap-3">
+    <div className="page-header mb-2.5 flex flex-wrap items-center justify-between gap-2">
       <div className="min-w-0">
-        <h1 className="text-lg font-bold tracking-[-0.02em] sm:text-xl">{title}</h1>
+        <h1 className="text-base font-bold tracking-[-0.02em] sm:text-lg">{title}</h1>
         {description ? (
-          <p className="mt-1 max-w-3xl text-sm text-[var(--fg-muted)]">{description}</p>
+          <p className="max-w-4xl text-[0.78rem] leading-snug text-[var(--fg-muted)]">
+            {description}
+          </p>
         ) : null}
       </div>
       {action ? (
-        <div className="flex flex-wrap items-center gap-2">{action}</div>
+        <div className="flex flex-wrap items-center gap-1.5">{action}</div>
       ) : null}
     </div>
   );
@@ -83,12 +87,12 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+    <div className="flex flex-col items-center gap-1.5 px-4 py-7 text-center">
       <p className="text-sm font-medium">{title}</p>
       {hint ? (
-        <p className="max-w-md text-sm text-[var(--fg-muted)]">{hint}</p>
+        <p className="max-w-md text-[0.8rem] text-[var(--fg-muted)]">{hint}</p>
       ) : null}
-      {action ? <div className="mt-2">{action}</div> : null}
+      {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );
 }
@@ -109,7 +113,9 @@ export function Field({
       <label className="label">{label}</label>
       {children}
       {hint ? (
-        <p className="mt-1 text-xs text-[var(--fg-subtle)]">{hint}</p>
+        <p className="mt-0.5 text-[0.7rem] leading-snug text-[var(--fg-subtle)]">
+          {hint}
+        </p>
       ) : null}
     </div>
   );

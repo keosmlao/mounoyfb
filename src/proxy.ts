@@ -14,6 +14,11 @@ export async function proxy(request: NextRequest) {
   // (route ນັ້ນບໍ່ສົ່ງຂໍ້ມູນທຸລະກິດອອກ ບອກແຕ່ວ່າຕໍ່ຖານຂໍ້ມູນໄດ້ບໍ່)
   if (pathname === "/api/health") return NextResponse.next();
 
+  // Webhook ຂອງ Facebook — ເຂົາບໍ່ມີ cookie ຂອງເຮົາ ຈຶ່ງ login ບໍ່ໄດ້.
+  // ດ່ານກັນຂອງມັນຄືລາຍເຊັນ `X-Hub-Signature-256` ທີ່ກວດຢູ່ໃນ route ເອງ
+  // (ເບິ່ງ `src/app/api/fb/webhook/route.ts`)
+  if (pathname === "/api/fb/webhook") return NextResponse.next();
+
   const isLoginPage = pathname === "/login";
 
   const authenticated = await verifySessionToken(
