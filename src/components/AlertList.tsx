@@ -25,7 +25,7 @@ export function AlertList({ alerts }: { alerts: Alert[] }) {
               </span>
             </div>
             <p className="mt-1 text-sm font-medium">{alert.title}</p>
-            <p className="mt-0.5 text-sm text-[var(--fg-muted)]">{alert.detail}</p>
+            <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{alert.detail}</p>
           </div>
           {alert.href ? (
             <Link href={alert.href} className="btn btn-sm shrink-0">

@@ -59,7 +59,7 @@ export function AdviceList({
                 </span>
                 <p className="text-sm font-medium">{a.title}</p>
                 <span
-                  className={`ml-auto rounded px-1.5 py-0.5 text-[0.7rem] font-medium ${CONFIDENCE_STYLE[a.confidence]}`}
+                  className={`ml-auto rounded px-1.5 py-0.5 text-2xs font-medium ${CONFIDENCE_STYLE[a.confidence]}`}
                   title="ອີງຈາກວ່າຂໍ້ມູນທີ່ໃຊ້ຕັດສິນມີຫຼາຍກວ່າຂັ້ນຕ່ຳຈັກເທົ່າ"
                 >
                   {CONFIDENCE_LABEL[a.confidence]}
@@ -76,7 +76,7 @@ export function AdviceList({
                 </p>
               ) : null}
 
-              <p className="mt-1.5 text-[0.7rem] text-[var(--fg-subtle)]">
+              <p className="mt-1.5 text-2xs text-[var(--fg-subtle)]">
                 ຄິດຈາກ: {a.sample}
               </p>
             </div>

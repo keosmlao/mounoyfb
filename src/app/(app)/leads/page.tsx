@@ -258,7 +258,7 @@ export default async function LeadsPage({
                               <select
                                 name="status"
                                 defaultValue={lead.status}
-                                className="field !py-1 !text-xs"
+                                className="field !py-1"
                               >
                                 {options(LEAD_STATUS_LABEL).map((o) => (
                                   <option key={o.value} value={o.value}>

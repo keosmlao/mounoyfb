@@ -24,7 +24,7 @@ export function RunToggle({
     <form action={formAction} className="inline-block text-right">
       <Button label={label} />
       {error ? (
-        <p className="mt-1 max-w-56 text-xs leading-snug text-[var(--danger)]">
+        <p className="mt-1 max-w-56 text-xs text-[var(--danger)]">
           {error}
         </p>
       ) : null}

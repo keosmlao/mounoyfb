@@ -231,7 +231,7 @@ export default async function OrdersPage({
                           </td>
                           <td>
                             <form action={changeStatus} className="flex gap-1">
-                              <select name="status" defaultValue={order.status} className="field !py-1 !text-xs">
+                              <select name="status" defaultValue={order.status} className="field !py-1">
                                 {options(ORDER_STATUS_LABEL).map((o) => (
                                   <option key={o.value} value={o.value}>{o.label}</option>
                                 ))}

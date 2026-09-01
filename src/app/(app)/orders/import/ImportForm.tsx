@@ -335,9 +335,9 @@ function Stat({
 }) {
   return (
     <div className="card p-4">
-      <p className="text-xs text-[var(--fg-muted)]">{label}</p>
+      <p className="text-2xs text-[var(--fg-muted)]">{label}</p>
       <p
-        className={`mt-1 text-lg font-semibold ${tone ? `text-[var(--${tone})]` : ""}`}
+        className={`mt-1 text-xl font-semibold ${tone ? `text-[var(--${tone})]` : ""}`}
       >
         {value}
       </p>

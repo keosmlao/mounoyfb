@@ -56,7 +56,7 @@ export function SyncProgress({
       <p className="mt-2 text-xs text-[var(--fg-muted)]">
         {message ?? "ກຳລັງເລີ່ມ..."} · ເລີ່ມ {startedAt}
       </p>
-      <p className="mt-0.5 text-[0.7rem] text-[var(--fg-subtle)]">
+      <p className="mt-0.5 text-2xs text-[var(--fg-subtle)]">
         ອອກຈາກໜ້ານີ້ໄດ້ — ວຽກຈະແລ່ນຕໍ່ຈົນຈົບ
       </p>
     </div>

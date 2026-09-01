@@ -116,7 +116,7 @@ function SegmentTable({
                   {r.label}
                   {thin ? (
                     <span
-                      className="ml-1.5 text-[0.7rem] text-[var(--fg-subtle)]"
+                      className="ml-1.5 text-2xs text-[var(--fg-subtle)]"
                       title={`ຄົນທັກໜ້ອຍກວ່າ ${Math.ceil(floor)} — ຕົວເລກຍັງແກວ່ງ`}
                     >
                       ຂໍ້ມູນບາງ

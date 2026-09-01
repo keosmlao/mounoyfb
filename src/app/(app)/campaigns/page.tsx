@@ -368,7 +368,7 @@ export default async function CampaignsPage({
                       <td className="num">
                         {formatCompact(d.messages)}
                         {d.messages && economics?.delivered ? (
-                          <div className="text-[0.68rem] font-normal text-[var(--fg-subtle)]">
+                          <div className="text-2xs font-normal text-[var(--fg-subtle)]">
                             ປິດ {formatPercent(economics.delivered / d.messages)}
                           </div>
                         ) : null}
@@ -380,7 +380,7 @@ export default async function CampaignsPage({
                       <td className="num">
                         {economics ? formatCompact(economics.delivered) : "—"}
                         {economics?.delivered ? (
-                          <div className="text-[0.68rem] font-normal text-[var(--fg-subtle)]">
+                          <div className="text-2xs font-normal text-[var(--fg-subtle)]">
                             {money(economics.costPerDeliveredOrder)}/ອັນ
                           </div>
                         ) : null}

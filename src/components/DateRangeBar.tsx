@@ -55,7 +55,7 @@ export function DateRangeBar({
           <input key={k} type="hidden" name={k} value={v as string} />
         ))}
         <div>
-          <label className="label !text-[0.7rem]">ແຕ່ວັນທີ່</label>
+          <label className="label">ແຕ່ວັນທີ່</label>
           <input
             type="date"
             name="from"
@@ -64,7 +64,7 @@ export function DateRangeBar({
           />
         </div>
         <div>
-          <label className="label !text-[0.7rem]">ຫາວັນທີ່</label>
+          <label className="label">ຫາວັນທີ່</label>
           <input type="date" name="to" defaultValue={range.to} className="field !py-0.5" />
         </div>
         <button type="submit" className="btn btn-sm">

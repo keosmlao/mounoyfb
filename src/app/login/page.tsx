@@ -28,7 +28,7 @@ export default async function LoginPage({
           <span className="brand-mark grid h-11 w-11 place-items-center rounded-xl text-lg font-black">F</span>
           <div>
             <p className="font-bold tracking-[0.08em]">FBMONOY</p>
-            <p className="text-[0.68rem] tracking-[0.16em] text-blue-200">ADS OPERATIONS</p>
+            <p className="text-2xs tracking-[0.16em] text-blue-200">ADS OPERATIONS</p>
           </div>
         </div>
         <div className="relative z-10 max-w-xl">
@@ -61,7 +61,7 @@ export default async function LoginPage({
             <span className="brand-mark grid h-10 w-10 place-items-center rounded-xl font-black text-white">F</span>
             <div>
               <p className="font-bold tracking-[0.08em]">FBMONOY</p>
-              <p className="text-[0.65rem] tracking-[0.14em] text-[var(--fg-subtle)]">ADS OPERATIONS</p>
+              <p className="text-2xs tracking-[0.14em] text-[var(--fg-subtle)]">ADS OPERATIONS</p>
             </div>
           </div>
 
@@ -83,7 +83,7 @@ export default async function LoginPage({
           )}
           </div>
 
-          <p className="mt-5 text-center text-[0.7rem] text-[var(--fg-subtle)]">
+          <p className="mt-5 text-center text-2xs text-[var(--fg-subtle)]">
             ລະຫັດຜ່ານໃຊ້ຮ່ວມກັນທັງທີມ — ປ່ຽນໄດ້ທີ່ APP_PASSWORD ໃນ .env
           </p>
         </div>

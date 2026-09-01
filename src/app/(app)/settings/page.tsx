@@ -488,7 +488,7 @@ export default async function SettingsPage() {
                 name="cannedReplies"
                 rows={6}
                 defaultValue={canned.join("\n")}
-                className="field font-mono text-sm"
+                className="field font-mono text-xs"
                 placeholder={"ລາຄາ 29,000 ກີບ ຈ້າ\nສົ່ງທົ່ວປະເທດ ເກັບເງິນປາຍທາງໄດ້"}
               />
               <SubmitButton>ບັນທຶກຄຳຕອບ</SubmitButton>

@@ -87,7 +87,7 @@ export function UserAdmin({
                     <td className="font-medium">
                       {u.name}
                       {isMe ? (
-                        <span className="ml-1 text-[0.7rem] text-[var(--fg-subtle)]">
+                        <span className="ml-1 text-2xs text-[var(--fg-subtle)]">
                           (ທ່ານ)
                         </span>
                       ) : null}
@@ -112,7 +112,7 @@ export function UserAdmin({
                           required
                           minLength={8}
                           placeholder="ລະຫັດໃໝ່"
-                          className="field !py-0.5 !text-xs"
+                          className="field !py-0.5"
                           autoComplete="new-password"
                         />
                         <SubmitButton className="btn btn-sm" pendingText="...">
