@@ -430,6 +430,92 @@ export type FbAssets = {
   pagesError?: string;
 };
 
+type RawAccount = {
+  id: string;
+  name?: string;
+  currency?: string;
+  account_status?: number;
+  timezone_name?: string;
+  funding_source_details?: { display_string?: string };
+  business?: { name?: string };
+  // ຄ່າເງິນມາເປັນຂໍ້ຄວາມ ແລະ ເປັນຫົວໜ່ວຍນ້ອຍສຸດ ("1403" = $14.03)
+  balance?: string;
+  amount_spent?: string;
+  spend_cap?: string;
+};
+
+const ACCOUNT_FIELDS =
+  "id,name,currency,account_status,timezone_name," +
+  "funding_source_details,business{name},balance,amount_spent,spend_cap";
+
+/** ບັນຊີໂຄສະນາທັງໝົດທີ່ token ນີ້ເຫັນ — ພ້ອມຍອດຄ້າງ/ຍອດໃຊ້ໄປ */
+async function fetchAdAccounts(config: FbConfig): Promise<FbAssetAccount[]> {
+  // system user token ບາງກໍລະນີເຫັນສະເພາະ assigned_ad_accounts
+  let raw = await graphAll<RawAccount>(config, "me/adaccounts", {
+    fields: ACCOUNT_FIELDS,
+  });
+  if (raw.length === 0) {
+    try {
+      raw = await graphAll<RawAccount>(config, "me/assigned_ad_accounts", {
+        fields: ACCOUNT_FIELDS,
+      });
+    } catch {
+      // ບໍ່ມີ edge ນີ້ກໍ່ຂ້າມໄປ — ຖືວ່າບໍ່ມີບັນຊີ
+    }
+  }
+
+  return raw.map((a) => {
+    const currency = a.currency ?? "USD";
+    return {
+      fbAccountId: a.id, // ມາເປັນຮູບແບບ act_XXXXXXXX ຢູ່ແລ້ວ
+      name: a.name ?? a.id,
+      currency,
+      status: mapAccountStatus(a.account_status),
+      timezone: a.timezone_name ?? null,
+      fundingSource: a.funding_source_details?.display_string ?? null,
+      businessName: a.business?.name ?? null,
+      balance: fromMinorUnits(a.balance, currency),
+      amountSpent: fromMinorUnits(a.amount_spent, currency),
+      spendCap: fromMinorUnits(a.spend_cap, currency),
+    };
+  });
+}
+
+/**
+ * ອັບເດດ**ສະເພາະຂໍ້ມູນການຊຳລະ**ຂອງບັນຊີທີ່ຜູກໄວ້ແລ້ວ (1 request).
+ *
+ * ຍອດຄ້າງຢູ່ໜ້າ `/billing` ມາຈາກຄ່າເຫຼົ່ານີ້ ແລະ ເມື່ອກ່ອນມັນສົດຂຶ້ນສະເພາະ
+ * ຕອນຄົນກົດ “ນຳເຂົ້າບັນຊີ” ຢູ່ໜ້າຕັ້ງຄ່າ — ຮອບດຶງປົກກະຕິບໍ່ໄດ້ແຕະ ຈຶ່ງຄ້າງເກົ່າ
+ * ແລ້ວໜ້າຈໍຂຶ້ນ “ຂໍ້ມູນເກົ່າ” ທັງທີ່ດຶງທຸກມື້.
+ *
+ * **ບໍ່ສ້າງບັນຊີໃໝ່** — ການເພີ່ມບັນຊີຍັງເປັນວຽກຂອງ `importFbAssets()` ຢູ່ຄືເກົ່າ.
+ */
+export async function refreshAdAccountBilling(): Promise<number> {
+  const config = await getFbConfig();
+  if (!config) throw new Error("ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token");
+
+  const accounts = await fetchAdAccounts(config);
+  const at = new Date();
+  let updated = 0;
+
+  for (const a of accounts) {
+    const done = await prisma.adAccount.updateMany({
+      where: { fbAccountId: a.fbAccountId },
+      data: {
+        fbFundingSource: a.fundingSource,
+        fbBusinessName: a.businessName,
+        fbBalance: a.balance,
+        fbAmountSpent: a.amountSpent,
+        fbSpendCap: a.spendCap,
+        fbBillingAt: at,
+      },
+    });
+    updated += done.count;
+  }
+
+  return updated;
+}
+
 /**
  * ທົດສອບວ່າ token ໃຊ້ໄດ້ບໍ່ ແລະ ດຶງລາຍການບັນຊີໂຄສະນາ/ເພຈ ທີ່ token ນີ້ເຂົ້າເຖິງໄດ້.
  * ໃຊ້ເພື່ອບໍ່ໃຫ້ຜູ້ໃຊ້ຕ້ອງໄປຫາ act_... ເອງ.
@@ -446,52 +532,7 @@ export async function fetchFbAssets(): Promise<FbAssets> {
     fields: "id,name",
   });
 
-  type RawAccount = {
-    id: string;
-    name?: string;
-    currency?: string;
-    account_status?: number;
-    timezone_name?: string;
-    funding_source_details?: { display_string?: string };
-    business?: { name?: string };
-    // ຄ່າເງິນມາເປັນຂໍ້ຄວາມ ແລະ ເປັນຫົວໜ່ວຍນ້ອຍສຸດ ("1403" = $14.03)
-    balance?: string;
-    amount_spent?: string;
-    spend_cap?: string;
-  };
-  const accountFields =
-    "id,name,currency,account_status,timezone_name," +
-    "funding_source_details,business{name},balance,amount_spent,spend_cap";
-
-  // system user token ບາງກໍລະນີເຫັນສະເພາະ assigned_ad_accounts
-  let raw = await graphAll<RawAccount>(config, "me/adaccounts", {
-    fields: accountFields,
-  });
-  if (raw.length === 0) {
-    try {
-      raw = await graphAll<RawAccount>(config, "me/assigned_ad_accounts", {
-        fields: accountFields,
-      });
-    } catch {
-      // ບໍ່ມີ edge ນີ້ກໍ່ຂ້າມໄປ — ຖືວ່າບໍ່ມີບັນຊີ
-    }
-  }
-
-  const accounts: FbAssetAccount[] = raw.map((a) => {
-    const currency = a.currency ?? "USD";
-    return {
-      fbAccountId: a.id, // ມາເປັນຮູບແບບ act_XXXXXXXX ຢູ່ແລ້ວ
-      name: a.name ?? a.id,
-      currency,
-      status: mapAccountStatus(a.account_status),
-      timezone: a.timezone_name ?? null,
-      fundingSource: a.funding_source_details?.display_string ?? null,
-      businessName: a.business?.name ?? null,
-      balance: fromMinorUnits(a.balance, currency),
-      amountSpent: fromMinorUnits(a.amount_spent, currency),
-      spendCap: fromMinorUnits(a.spend_cap, currency),
-    };
-  });
+  const accounts = await fetchAdAccounts(config);
 
   // ເພຈຕ້ອງການສິດ pages_show_list — ບໍ່ມີກໍ່ຍັງໃຊ້ລະບົບໄດ້ ຈຶ່ງບໍ່ໃຫ້ລົ້ມ
   let pages: FbAssetPage[] = [];
@@ -1198,6 +1239,10 @@ export async function runSyncJob(
   heartbeat.unref();
 
   try {
+    // ຍອດຄ້າງຊຳລະຂອງບັນຊີ — 1 request ເທົ່ານັ້ນ ແລະ ລົ້ມກໍ່ບໍ່ໃຫ້ວຽກຫຼັກລົ້ມນຳ
+    // (ບໍ່ດັ່ງນັ້ນໜ້າ /billing ຂຶ້ນ “ຂໍ້ມູນເກົ່າ” ທັງທີ່ດຶງທຸກມື້)
+    await refreshAdAccountBilling().catch(() => undefined);
+
     const result = await syncFromFacebook(range, levels, async (progress) => {
       await prisma.syncLog.update({
         where: { id: logId },

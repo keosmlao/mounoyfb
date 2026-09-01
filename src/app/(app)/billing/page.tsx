@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Card, CardHeader, EmptyState, Num, PageHeader } from "@/components/ui";
 import { StatStrip, StatTile } from "@/components/StatTile";
+import { SubmitButton } from "@/components/SubmitButton";
 import { addDays, formatTimeLao, parseDate, todayStr } from "@/lib/date";
 import { formatInt, formatMoney } from "@/lib/format";
 import { totalsScope } from "@/lib/scope";
@@ -12,6 +13,7 @@ import {
   STALE_HOURS,
   type AccountBilling,
 } from "@/lib/billing";
+import { refreshBillingNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -69,9 +71,16 @@ export default async function BillingPage() {
         title="ການຊຳລະຄ່າໂຄສະນາ"
         description="ແຍກເງິນທີ່ຈ່າຍແລ້ວ ອອກຈາກທີ່ຍັງຄ້າງ — ເພື່ອຮູ້ວ່າຕ້ອງກຽມເທົ່າໃດ"
         action={
-          <Link href="/ad-accounts" className="btn btn-sm">
-            ບັນຊີໂຄສະນາ
-          </Link>
+          <>
+            <form action={refreshBillingNow}>
+              <SubmitButton className="btn btn-sm" pendingText="ກຳລັງດຶງ...">
+                ດຶງຍອດຄ້າງດຽວນີ້
+              </SubmitButton>
+            </form>
+            <Link href="/ad-accounts" className="btn btn-sm">
+              ບັນຊີໂຄສະນາ
+            </Link>
+          </>
         }
       />
 
@@ -112,7 +121,7 @@ export default async function BillingPage() {
               }
               hint={
                 !summary.oldestAt
-                  ? "ຍັງບໍ່ເຄີຍນຳເຂົ້າ"
+                  ? "ຍັງບໍ່ເຄີຍດຶງ"
                   : anyStale
                     ? `ເກົ່າກວ່າ ${STALE_HOURS} ຊົ່ວໂມງ`
                     : "ໃໝ່ຢູ່"
@@ -132,9 +141,11 @@ export default async function BillingPage() {
                     : `ຂໍ້ມູນການຊຳລະດຶງມາເກີນ ${STALE_HOURS} ຊົ່ວໂມງແລ້ວ`}{" "}
                   — ຕົວເລກທີ່ເຫັນອາດບໍ່ກົງກັບຄວາມຈິງ
                 </span>
-                <Link href="/settings" className="btn btn-sm ml-auto">
-                  ໄປດຶງຂໍ້ມູນ
-                </Link>
+                <form action={refreshBillingNow} className="ml-auto">
+                  <SubmitButton className="btn btn-sm" pendingText="ກຳລັງດຶງ...">
+                    ດຶງດຽວນີ້
+                  </SubmitButton>
+                </form>
               </div>
             </Card>
           ) : null}
