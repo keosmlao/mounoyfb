@@ -23,6 +23,9 @@ import { buildAlerts, countActionable } from "@/lib/alerts";
 import { AdviceList } from "@/components/AdviceList";
 import { actionable, buildAdvice, waiting } from "@/lib/advice";
 import { loadMoney } from "@/lib/money-server";
+import { loadTodayFocus } from "@/lib/today-server";
+import { FocusStrip } from "@/components/FocusStrip";
+import { ACTION_LABEL } from "@/lib/playbook";
 import { orderEconomics } from "@/lib/advice-rules";
 import {
   deriveOrderEconomics,
@@ -114,6 +117,9 @@ export default async function DashboardPage({
       },
     }),
   ]);
+
+  // "ດຽວນີ້ຕ້ອງເຮັດຫຍັງ" — ຄິວວຽກ · ຄຳສັ່ງແຄມເປນ · ໜີ້ຄ່າໂຄສະນາ
+  const focus = await loadTodayFocus(money);
 
   const total = aggregate(rows);
   const prevTotal = aggregate(prevRows);
@@ -207,6 +213,46 @@ export default async function DashboardPage({
 
       <DateRangeBar basePath="/" range={range} activePreset={sp.preset} />
 
+      {/* ສິ່ງທີ່ຍັງແກ້ທັນ ຢູ່ເທິງສຸດ — ຕົວເລກຜົນງານຂ້າງລຸ່ມເປັນອະດີດແລ້ວ */}
+      <FocusStrip
+        focus={focus}
+        alerts={countActionable(alerts)}
+        money={money}
+      />
+
+      {focus.campaigns.plays.length > 0 ? (
+        <Card className="mb-3">
+          <CardHeader
+            title="ຄຳສັ່ງແຄມເປນມື້ນີ້"
+            subtitle="ຄິດຈາກອາຍຸແຄມເປນ ແລະ ຄ່າຕໍ່ຄົນທັກທຽບເປົ້າກຳໄລ"
+            action={
+              <Link href="/playbook" className="btn btn-sm">
+                ເບິ່ງທັງໝົດ
+              </Link>
+            }
+          />
+          <ul className="divide-y divide-[var(--border)]">
+            {focus.campaigns.plays.slice(0, 3).map((p) => {
+              const tone = ACTION_LABEL[p.action];
+              return (
+                <li key={p.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-4 py-2.5">
+                  <Badge tone={tone.tone as "danger"}>{tone.text}</Badge>
+                  <Link href={`/campaigns/${p.id}`} className="link text-sm font-medium">
+                    {p.name}
+                  </Link>
+                  <span className="text-xs text-[var(--fg-subtle)]">
+                    ອາຍຸ {p.ageDays} ວັນ
+                  </span>
+                  <p className="w-full text-xs leading-relaxed text-[var(--fg-muted)]">
+                    {p.reason} → {p.next}
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ) : null}
+
       {/* ຕົວເລກນຳ — ກຳໄລຈິງຈາກອໍເດີ ບໍ່ແມ່ນຈາກ pixel ຂອງ Facebook */}
       <Card className="performance-hero mb-4 overflow-hidden p-5 sm:p-7">
         <div className="relative z-10 flex flex-wrap items-end justify-between gap-7">
@@ -248,7 +294,7 @@ export default async function DashboardPage({
               {hasOrderData && total.spendLak ? `${realRoas.toFixed(2)}x` : "—"}
             </dd>
             {econ ? (
-              <dd className="text-[0.7rem] text-[var(--fg-subtle)]">
+              <dd className="text-2xs text-[var(--fg-subtle)]">
                 ຄຸ້ມທຶນທີ່ {econ.breakEvenRoas.toFixed(2)}x
               </dd>
             ) : null}
@@ -261,7 +307,7 @@ export default async function DashboardPage({
             <dt>ຍອດຂາຍຈິງ</dt>
             <dd>{hasOrderData ? money(realRevenue) : "—"}</dd>
             {orderTotals.delivered > 0 ? (
-              <dd className="text-[0.7rem] text-[var(--fg-subtle)]">
+              <dd className="text-2xs text-[var(--fg-subtle)]">
                 {formatCompact(orderTotals.delivered)} ອໍເດີສົ່ງສຳເລັດ
               </dd>
             ) : null}

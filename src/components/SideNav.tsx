@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { logout } from "@/app/login/actions";
+import { NavIcon, type IconName } from "./nav-icons";
 
 type NavItem = {
   href: string;
   label: string;
-  icon: string;
+  icon: IconName;
   badgeKey?: "alerts" | "inbox";
 };
 
@@ -18,37 +19,41 @@ const GROUPS: NavGroup[] = [
   {
     title: "ວຽກປະຈຳວັນ",
     items: [
-      { href: "/", label: "ໜ້າຫຼັກ", icon: "◈" },
-      { href: "/inbox", label: "ຂໍ້ຄວາມ", icon: "✉", badgeKey: "inbox" },
-      { href: "/orders", label: "ອໍເດີ", icon: "▧" },
-      { href: "/leads", label: "ລູກຄ້າ", icon: "◑" },
-      { href: "/campaigns", label: "ແຄມເປນ", icon: "◉" },
-      { href: "/analysis", label: "ວິເຄາະ", icon: "◭" },
-      { href: "/alerts", label: "ການແຈ້ງເຕືອນ", icon: "⚠", badgeKey: "alerts" },
+      { href: "/", label: "ໜ້າຫຼັກ", icon: "home" },
+      { href: "/inbox", label: "ຂໍ້ຄວາມ", icon: "inbox", badgeKey: "inbox" },
+      { href: "/queue", label: "ຄິວວຽກ", icon: "queue" },
+      { href: "/orders", label: "ອໍເດີ", icon: "orders" },
+      { href: "/leads", label: "ລູກຄ້າ", icon: "leads" },
+      { href: "/campaigns", label: "ແຄມເປນ", icon: "campaigns" },
+      { href: "/analysis", label: "ວິເຄາະ", icon: "analysis" },
+      { href: "/playbook", label: "ວິທີຍິງ", icon: "playbook" },
+      { href: "/behavior", label: "ພຶດຕິກຳລູກຄ້າ", icon: "behavior" },
+      { href: "/alerts", label: "ການແຈ້ງເຕືອນ", icon: "alerts", badgeKey: "alerts" },
     ],
   },
   {
     title: "ວຽກເປັນຮອບ",
     items: [
-      { href: "/reports", label: "ລາຍງານ", icon: "▤" },
-      { href: "/orders/import", label: "ນຳເຂົ້າຍອດຂາຍ", icon: "⤒" },
-      { href: "/products", label: "ສິນຄ້າ", icon: "◻" },
-      { href: "/ad-accounts", label: "ບັນຊີໂຄສະນາ", icon: "▣" },
-      { href: "/fb-pages", label: "ເພຈ Facebook", icon: "⚑" },
+      { href: "/reports", label: "ລາຍງານ", icon: "reports" },
+      { href: "/orders/import", label: "ນຳເຂົ້າຍອດຂາຍ", icon: "import" },
+      { href: "/products", label: "ສິນຄ້າ", icon: "products" },
+      { href: "/ad-accounts", label: "ບັນຊີໂຄສະນາ", icon: "adAccounts" },
+      { href: "/billing", label: "ການຊຳລະ", icon: "billing" },
+      { href: "/fb-pages", label: "ເພຈ Facebook", icon: "pages" },
     ],
   },
   {
     title: "ລະບົບ",
-    items: [{ href: "/settings", label: "ຕັ້ງຄ່າ", icon: "⚙" }],
+    items: [{ href: "/settings", label: "ຕັ້ງຄ່າ", icon: "settings" }],
   },
 ];
 
 /** 4 ໜ້າທີ່ໃຊ້ຫຼາຍທີ່ສຸດໃນມືຖື — ອັນອື່ນຢູ່ໃນເມນູ ☰ */
 const BOTTOM: NavItem[] = [
-  { href: "/", label: "ໜ້າຫຼັກ", icon: "◈" },
-  { href: "/inbox", label: "ຂໍ້ຄວາມ", icon: "✉", badgeKey: "inbox" },
-  { href: "/orders", label: "ອໍເດີ", icon: "▧" },
-  { href: "/campaigns", label: "ແຄມເປນ", icon: "◉" },
+  { href: "/", label: "ໜ້າຫຼັກ", icon: "home" },
+  { href: "/inbox", label: "ຂໍ້ຄວາມ", icon: "inbox", badgeKey: "inbox" },
+  { href: "/orders", label: "ອໍເດີ", icon: "orders" },
+  { href: "/campaigns", label: "ແຄມເປນ", icon: "campaigns" },
 ];
 
 /** ຈື່ວ່າຜູ້ໃຊ້ຫຍໍ້ເມນູໄວ້ບໍ່ — ເປັນຄວາມສະດວກສ່ວນຕົວຂອງແຕ່ລະເຄື່ອງ */
@@ -154,7 +159,7 @@ export function SideNav({
             aria-expanded={wide}
             title={wide ? "ຫຍໍ້ເມນູ" : "ຂະຫຍາຍເມນູ"}
           >
-            ☰
+            <NavIcon name="menu" />
           </button>
           {wide ? (
             <Link href="/" className="rail-brand-name">
@@ -178,9 +183,7 @@ export function SideNav({
                     aria-current={active ? "page" : undefined}
                     className={`rail-item ${active ? "rail-item-active" : ""}`}
                   >
-                    <span aria-hidden className="rail-icon">
-                      {item.icon}
-                    </span>
+                    <NavIcon name={item.icon} className="nav-svg rail-icon" />
                     <span className="rail-label">{item.label}</span>
                     {count > 0 ? (
                       <span className="nav-count">
@@ -205,9 +208,7 @@ export function SideNav({
                 className="rail-item"
                 title={userName ? `ອອກຈາກລະບົບ (${userName})` : "ອອກຈາກລະບົບ"}
               >
-                <span aria-hidden className="rail-icon">
-                  ⏻
-                </span>
+                <NavIcon name="logout" className="nav-svg rail-icon" />
                 <span className="rail-label">ອອກຈາກລະບົບ</span>
               </button>
             </form>
@@ -223,7 +224,7 @@ export function SideNav({
           className="btn btn-sm"
           aria-label="ເປີດເມນູ"
         >
-          ☰
+          <NavIcon name="menu" />
         </button>
         <Link href="/" className="brand-name text-sm">
           FBMONOY
@@ -257,9 +258,7 @@ export function SideNav({
                       onClick={() => setSheet(false)}
                       className={`nav-menu-item ${active ? "bg-[var(--brand-soft)] font-semibold text-[var(--brand)]" : ""}`}
                     >
-                      <span aria-hidden className="w-4 text-center">
-                        {item.icon}
-                      </span>
+                      <NavIcon name={item.icon} className="nav-svg" />
                       {item.label}
                       {count > 0 ? (
                         <span className="nav-count ml-auto">
@@ -276,9 +275,7 @@ export function SideNav({
                 <p className="rail-group-title">ເຂົ້າໃນນາມ {userName}</p>
               ) : null}
               <button type="submit" className="nav-menu-item">
-                <span aria-hidden className="w-4 text-center">
-                  ⏻
-                </span>
+                <NavIcon name="logout" className="nav-svg" />
                 ອອກຈາກລະບົບ
               </button>
             </form>
@@ -298,8 +295,8 @@ export function SideNav({
               aria-current={active ? "page" : undefined}
               className={`bottom-nav-item ${active ? "bottom-nav-active" : ""}`}
             >
-              <span aria-hidden className="relative text-lg leading-none">
-                {item.icon}
+              <span aria-hidden className="relative leading-none">
+                <NavIcon name={item.icon} className="nav-svg-lg" />
                 {count > 0 ? (
                   <span className="nav-count absolute -right-3 -top-2 scale-90">
                     {count > 99 ? "99+" : count}
@@ -316,8 +313,8 @@ export function SideNav({
           className="bottom-nav-item"
           aria-label="ເປີດເມນູທັງໝົດ"
         >
-          <span aria-hidden className="text-lg leading-none">
-            ☰
+          <span aria-hidden className="leading-none">
+            <NavIcon name="menu" className="nav-svg-lg" />
           </span>
           ເມນູ
         </button>

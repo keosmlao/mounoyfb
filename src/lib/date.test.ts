@@ -4,6 +4,10 @@ import {
   chunkRange,
   countDays,
   formatAgo,
+  laoDay,
+  laoDayStart,
+  laoHour,
+  laoWeekday,
   parseDate,
   toDateInput,
 } from "./date";
@@ -43,4 +47,19 @@ test("formatAgo ນັບຖອຍຫຼັງຕາມໜ່ວຍທີ່ອ�
   assert.equal(ago(60 * 30), "1 ວັນກ່ອນ");
   // ເກີນ 7 ວັນ ປ່ຽນເປັນວັນທີ່ຈິງ ເພາະ "40 ວັນກ່ອນ" ບໍ່ຊ່ວຍຫຍັງ
   assert.match(ago(60 * 24 * 40), /^\d{2}\/\d{2} \d{2}:\d{2}$/);
+});
+
+test("ເວລາຈິງແປງເປັນຊົ່ວໂມງ/ວັນຕາມເວລາລາວ (UTC+7)", () => {
+  // 17:00Z ຂອງວັນພະຫັດ = 00:00 ຂອງວັນສຸກ ຕາມເວລາລາວ
+  const t = new Date("2026-08-20T17:00:00.000Z");
+  assert.equal(laoHour(t), 0);
+  assert.equal(laoWeekday(t), 5);
+  assert.equal(laoDay(t), "2026-08-21");
+});
+
+test("ຕົ້ນວັນລາວເລີ່ມກ່ອນ 00:00Z ຢູ່ 7 ຊົ່ວໂມງ", () => {
+  assert.equal(
+    laoDayStart("2026-08-21").toISOString(),
+    "2026-08-20T17:00:00.000Z",
+  );
 });

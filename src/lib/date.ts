@@ -182,3 +182,54 @@ export function formatAgo(value: Date, now: Date = new Date()): string {
 export function daysAgo(days: number): Date {
   return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 }
+
+// ------------------------------------------------------- ເວລາຈິງ → ເວລາລາວ
+
+/**
+ * ລາວເປັນ UTC+7 ຕະຫຼອດປີ (ບໍ່ມີ daylight saving) ຈຶ່ງບວກເອົາໄດ້ໂດຍກົງ.
+ * ໃຊ້ກັບຄໍລຳທີ່ເປັນ **ເວລາຈິງ** (`sentAt`, `createdAt`) ເທົ່ານັ້ນ —
+ * ຄໍລຳ `@db.Date` ເປັນ UTC midnight ຢູ່ແລ້ວ ຫ້າມເອົາມາຜ່ານບ່ອນນີ້.
+ */
+const LAO_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+function laoShift(value: Date): Date {
+  return new Date(value.getTime() + LAO_OFFSET_MS);
+}
+
+/** ຊົ່ວໂມງໃນມື້ຕາມເວລາລາວ (0–23) */
+export function laoHour(value: Date): number {
+  return laoShift(value).getUTCHours();
+}
+
+/** ວັນໃນອາທິດຕາມເວລາລາວ — 0 = ວັນອາທິດ */
+export function laoWeekday(value: Date): number {
+  return laoShift(value).getUTCDay();
+}
+
+/** ວັນທີ່ຕາມເວລາລາວ ໃນຮູບແບບ "YYYY-MM-DD" */
+export function laoDay(value: Date): string {
+  return laoShift(value).toISOString().slice(0, 10);
+}
+
+/**
+ * ຈຸດເລີ່ມຂອງວັນລາວ ເປັນເວລາຈິງ — ໃຊ້ກັ່ນຕອງຄໍລຳເວລາຈິງດ້ວຍຊ່ວງວັນ
+ * ("2026-08-29" ເລີ່ມຕອນ 17:00Z ຂອງມື້ກ່ອນ ບໍ່ແມ່ນ 00:00Z)
+ */
+export function laoDayStart(value: string): Date {
+  return new Date(parseDate(value).getTime() - LAO_OFFSET_MS);
+}
+
+const LAO_WEEKDAYS = [
+  "ວັນອາທິດ",
+  "ວັນຈັນ",
+  "ວັນອັງຄານ",
+  "ວັນພຸດ",
+  "ວັນພະຫັດ",
+  "ວັນສຸກ",
+  "ວັນເສົາ",
+];
+
+/** 0–6 → "ວັນຈັນ" */
+export function weekdayLao(weekday: number): string {
+  return LAO_WEEKDAYS[weekday] ?? "—";
+}
