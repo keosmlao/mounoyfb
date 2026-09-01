@@ -249,7 +249,8 @@ export async function runInboxSync(): Promise<void> {
     await putState(INBOX_STATE_KEYS.syncedAt, new Date().toISOString());
     await putState(
       INBOX_STATE_KEYS.result,
-      `comment ໃໝ່ ${result.comments} · ຫ້ອງແຊັດ ${result.threads} · ຂໍ້ຄວາມ ${result.messages}`,
+      `comment ໃໝ່ ${result.comments} · ຫ້ອງແຊັດ ${result.threads} · ຂໍ້ຄວາມ ${result.messages}` +
+        (result.filled > 0 ? ` · ຕື່ມໄຟລ໌ແນບ ${result.filled}` : ""),
     );
     await putState(INBOX_STATE_KEYS.error, result.errors.join(" | "));
   } catch (error) {

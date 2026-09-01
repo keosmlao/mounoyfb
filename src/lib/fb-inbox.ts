@@ -1,5 +1,14 @@
 import { prisma } from "./prisma";
 import { explainFbError, getFbConfig } from "./fb";
+import {
+  type MessageAttachment,
+  attachmentsLabel,
+  displayAttachments,
+  normalizeAttachments,
+  normalizeCommentAttachment,
+  type RawCommentAttachment,
+  type RawMessageAttachment,
+} from "./fb-attachment";
 
 /**
  * ກ່ອງຂໍ້ຄວາມຂອງເພຈ — comment ແລະ ແຊັດ (Messenger).
@@ -26,6 +35,16 @@ const LIMITS = {
   threadsPerPage: 50,
   messagesPerThread: 25,
 };
+
+/**
+ * ຊ່ອງໄຟລ໌ແນບ — ຂໍ `image_data`/`video_data` ທັງກ້ອນ ເພາະໃນນັ້ນມີທັງລິ້ງ
+ * ແລະ ຮູບຕົວຢ່າງ, ສ່ວນສຽງ/ໄຟລ໌ອື່ນມາທາງ `file_url`.
+ */
+const MESSAGE_ATTACHMENT_FIELDS =
+  "attachments{id,mime_type,name,file_url,image_data,video_data}";
+
+/** `media` ມີ `image{src}` ທີ່ເອົາມາສະແດງໄດ້ ສ່ວນ `target` ຄືລິ້ງໄປ Facebook */
+const COMMENT_ATTACHMENT_FIELDS = "attachment{type,url,title,media,target}";
 
 type GraphError = { message: string; type?: string; code?: number };
 
@@ -347,7 +366,7 @@ type RawComment = {
   is_hidden?: boolean;
   from?: { id: string; name?: string };
   parent?: { id: string };
-  attachment?: { type?: string; url?: string };
+  attachment?: RawCommentAttachment;
 };
 
 /** ບັນທຶກ comment ລົງຖານຂໍ້ມູນ — ຄືນ true ຖ້າເປັນແຖວໃໝ່ */
@@ -358,7 +377,7 @@ async function saveComment(
 ): Promise<boolean> {
   const fromPage = raw.from?.id === fbPageId;
   const commentedAt = when(raw.created_time) ?? new Date();
-  const attachment = raw.attachment?.url ?? raw.attachment?.type ?? null;
+  const attachment = normalizeCommentAttachment(raw.attachment);
 
   const existing = await prisma.fbComment.findUnique({
     where: { fbCommentId: raw.id },
@@ -367,7 +386,9 @@ async function saveComment(
 
   const shared = {
     message: raw.message ?? null,
-    attachment,
+    attachment: attachment?.type ?? null,
+    attachmentUrl: attachment?.imageUrl ?? null,
+    attachmentLink: attachment?.link ?? null,
     likeCount: raw.like_count ?? 0,
     hidden: raw.is_hidden ?? false,
     fromName: raw.from?.name ?? null,
@@ -407,7 +428,7 @@ async function pullComments(
     `${post.fbPostId}/comments`,
     {
       fields:
-        "id,message,created_time,like_count,is_hidden,from,parent{id},attachment{type,url}",
+        `id,message,created_time,like_count,is_hidden,from,parent{id},${COMMENT_ATTACHMENT_FIELDS}`,
       filter: "stream", // ລວມຄຳຕອບໃຕ້ comment ນຳ
       order: "reverse_chronological",
     },
@@ -440,7 +461,7 @@ type RawMessage = {
   message?: string;
   created_time?: string;
   from?: { id: string; name?: string };
-  attachments?: { data?: { mime_type?: string; name?: string }[] };
+  attachments?: { data?: RawMessageAttachment[] };
 };
 
 async function pullThreads(
@@ -502,27 +523,33 @@ async function pullThreads(
     const rawMessages = await graphList<RawMessage>(
       version,
       `${conv.id}/messages`,
-      { fields: "id,message,created_time,from,attachments{mime_type,name}" },
+      { fields: `id,message,created_time,from,${MESSAGE_ATTACHMENT_FIELDS}` },
       page.token!,
       LIMITS.messagesPerThread,
     );
 
     for (const msg of rawMessages) {
       const fromPage = msg.from?.id === page.fbPageId;
-      const attach = msg.attachments?.data?.[0];
+      const files = normalizeAttachments(msg.attachments?.data);
+      // ເນື້ອຫາຂອງຂໍ້ຄວາມເປັນຂອງ Facebook ລ້ວນໆ (ບໍ່ມີສະຖານະວຽກຂອງຄົນ)
+      // ຈຶ່ງທັບໄດ້ — ຂໍ້ຄວາມເກົ່າຈຶ່ງໄດ້ຮັບຊ່ອງໄຟລ໌ແນບຄືນນຳ
+      const content = {
+        text: msg.message || null,
+        attachment: attachmentsLabel(files),
+        attachments: files,
+      };
       await prisma.fbMessage.upsert({
         where: { fbMessageId: msg.id },
         create: {
+          ...content,
           fbMessageId: msg.id,
           threadId: thread.id,
           fromPage,
           fromId: msg.from?.id ?? null,
           fromName: msg.from?.name ?? null,
-          text: msg.message || null,
-          attachment: attach ? (attach.name ?? attach.mime_type ?? "ໄຟລ໌ແນບ") : null,
           sentAt: when(msg.created_time) ?? lastMessageAt,
         },
-        update: {},
+        update: content,
       });
       messages++;
     }
@@ -547,6 +574,106 @@ export async function refreshThreadState(threadId: string): Promise<void> {
   });
 }
 
+// ------------------------------------------------- ຕື່ມໄຟລ໌ແນບຂອງຂໍ້ຄວາມເກົ່າ
+
+/**
+ * ຂໍ້ຄວາມທີ່**ໜ້າຈະມີໄຟລ໌ແນບ ແຕ່ເຮົາຍັງບໍ່ຮູ້ຈັກ**:
+ * ບໍ່ມີຕົວໜັງສືເລີຍ ຫຼື ມີແຕ່ຊື່ແທນເຊັ່ນ `[image-139…]` ຂອງເຄື່ອງມືພາຍນອກ.
+ *
+ * `attachment: null` ຄືເຄື່ອງໝາຍວ່າ "ຍັງບໍ່ເຄີຍໄດ້ໄຟລ໌" — ຮອບດຶງປົກກະຕິ
+ * ບໍ່ຊ່ວຍ ເພາະ `pullThreads()` ຂ້າມຫ້ອງທີ່ບໍ່ມີຂໍ້ຄວາມໃໝ່ (ປະຢັດໂຄຕ້າ)
+ * ຂໍ້ຄວາມເກົ່າຈຶ່ງບໍ່ເຄີຍຖືກດຶງຄືນ.
+ */
+function missingAttachmentWhere(sinceDays: number | null) {
+  return {
+    attachment: null,
+    OR: [{ text: null }, { text: "" }, { text: { startsWith: "[" } }],
+    thread: { page: { token: { not: null } } },
+    ...(sinceDays
+      ? { sentAt: { gte: new Date(Date.now() - sinceDays * 86_400_000) } }
+      : {}),
+  };
+}
+
+export function countMessagesMissingAttachments(sinceDays: number | null = null) {
+  return prisma.fbMessage.count({ where: missingAttachmentWhere(sinceDays) });
+}
+
+export type AttachmentBackfillResult = {
+  /** ຈຳນວນຂໍ້ຄວາມທີ່ໄປຖາມ Facebook */
+  checked: number;
+  /** ຈຳນວນທີ່ໄດ້ໄຟລ໌ແນບຄືນມາ */
+  filled: number;
+  errors: string[];
+};
+
+/** ຖາມ Facebook ຕິດກັນ 3 ເທື່ອບໍ່ໄດ້ = ບັນຫາຮ່ວມ (token/ສິດ) — ຢຸດໄວ້ກ່ອນ */
+const BACKFILL_GIVE_UP = 3;
+
+/**
+ * ຂໍ `attachments` ຂອງແຕ່ລະຂໍ້ຄວາມທີ່ຍັງບໍ່ມີໄຟລ໌ ແລ້ວເກັບໃສ່ຖານຂໍ້ມູນ.
+ *
+ * 1 ຂໍ້ຄວາມ = 1 request ຈຶ່ງຈຳກັດຈຳນວນຕໍ່ຮອບສະເໝີ. ຮອບອັດຕະໂນມັດເອົາແຕ່
+ * 30 ວັນຫຼ້າສຸດ ຈຶ່ງ "ໝົດເອງ" ໄດ້ — ຂໍ້ຄວາມທີ່ Facebook ບໍ່ຄືນໄຟລ໌ໃຫ້ແລ້ວ
+ * ຈະຫຼຸດອອກຈາກຊຸດເມື່ອມັນເກົ່າກວ່ານັ້ນ ບໍ່ແມ່ນຖືກຖາມຊ້ຳຕະຫຼອດໄປ.
+ */
+export async function backfillMessageAttachments({
+  limit = 100,
+  sinceDays = null,
+}: { limit?: number; sinceDays?: number | null } = {}): Promise<AttachmentBackfillResult> {
+  const config = await getFbConfig();
+  if (!config) throw new Error("ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token ໃນໜ້າຕັ້ງຄ່າ");
+
+  const rows = await prisma.fbMessage.findMany({
+    where: missingAttachmentWhere(sinceDays),
+    orderBy: { sentAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      fbMessageId: true,
+      thread: { select: { page: { select: { token: true } } } },
+    },
+  });
+
+  const result: AttachmentBackfillResult = { checked: 0, filled: 0, errors: [] };
+  const seen = new Set<string>();
+  let inARow = 0;
+
+  for (const row of rows) {
+    const token = row.thread.page.token;
+    if (!token) continue;
+
+    try {
+      result.checked++;
+      const fresh = await graphOne<{ attachments?: { data?: RawMessageAttachment[] } }>(
+        config.apiVersion,
+        row.fbMessageId,
+        { fields: MESSAGE_ATTACHMENT_FIELDS },
+        token,
+      );
+      inARow = 0;
+
+      const files = normalizeAttachments(fresh.attachments?.data);
+      if (files.length === 0) continue;
+
+      await prisma.fbMessage.update({
+        where: { id: row.id },
+        data: { attachments: files, attachment: attachmentsLabel(files) },
+      });
+      result.filled++;
+    } catch (error) {
+      const message = explainFbError(error);
+      if (!seen.has(message)) {
+        seen.add(message);
+        result.errors.push(message);
+      }
+      if (++inARow >= BACKFILL_GIVE_UP) break;
+    }
+  }
+
+  return result;
+}
+
 // ------------------------------------------------------------------ ດຶງທັງໝົດ
 
 export type InboxSyncResult = {
@@ -554,8 +681,13 @@ export type InboxSyncResult = {
   comments: number;
   threads: number;
   messages: number;
+  /** ຂໍ້ຄວາມເກົ່າທີ່ຫາກໍ່ໄດ້ໄຟລ໌ແນບຄືນໃນຮອບນີ້ */
+  filled: number;
   errors: string[];
 };
+
+/** ຕື່ມໄຟລ໌ແນບຍ້ອນຫຼັງໃນທຸກຮອບດຶງ — ໜ້ອຍໆ ບໍ່ໃຫ້ກິນໂຄຕ້າຂອງວຽກຫຼັກ */
+const BACKFILL_PER_SYNC = { limit: 50, sinceDays: 30 };
 
 /**
  * ດຶງ comment ແລະ ແຊັດ ຂອງທຸກເພຈທີ່ເປີດຕິດຕາມໄວ້.
@@ -570,6 +702,7 @@ export async function syncInbox(): Promise<InboxSyncResult> {
     comments: 0,
     threads: 0,
     messages: 0,
+    filled: 0,
     errors: [],
   };
   // ເກັບໄວ້ແຍກ label ກັບ ຂໍ້ຄວາມ ເພື່ອຮວມອັນທີ່ຊ້ຳກັນຕອນທ້າຍ
@@ -615,6 +748,17 @@ export async function syncInbox(): Promise<InboxSyncResult> {
     } catch (error) {
       failures.push({ label: `${page.name} (ແຊັດ)`, message: explainFbError(error) });
     }
+  }
+
+  // ຮູບເກົ່າທີ່ຍັງບໍ່ໄດ້ໄຟລ໌ — ຕື່ມໃຫ້ເທື່ອລະໜ້ອຍທຸກຮອບ ຈົນໝົດເອງ
+  try {
+    const backfill = await backfillMessageAttachments(BACKFILL_PER_SYNC);
+    result.filled = backfill.filled;
+    for (const message of backfill.errors) {
+      failures.push({ label: "ຕື່ມໄຟລ໌ແນບ", message });
+    }
+  } catch (error) {
+    failures.push({ label: "ຕື່ມໄຟລ໌ແນບ", message: explainFbError(error) });
   }
 
   // ຫຼາຍເພຈມັກລົ້ມດ້ວຍເຫດຜົນອັນດຽວກັນ (ເຊັ່ນ token ຂາດສິດ) —
@@ -813,4 +957,115 @@ export async function sendChatMessage(threadId: string, text: string) {
       messageCount: { increment: 1 },
     },
   });
+}
+
+// ------------------------------------------------ ໄຟລ໌ແນບ (ໃຫ້ /api/fb/media)
+
+/**
+ * ບອກ `/api/fb/media` ວ່າຈະໄປດຶງໄຟລ໌ຢູ່ໃສ.
+ *
+ * ລິ້ງທີ່ເກັບໄວ້**ໝົດອາຍຸ**ໄດ້ ຈຶ່ງມີ `refresh` ໄວ້ໃຫ້ຂໍລິ້ງໃໝ່ຈາກ Facebook
+ * ແລ້ວບັນທຶກທັບ — ຂໍ້ຄວາມທີ່ດຶງມາກ່ອນຈະມີຊ່ອງນີ້ ກໍ່ໄດ້ໄຟລ໌ຄືນທາງນີ້ຄືກັນ.
+ */
+export type MediaSource = {
+  url: string;
+  kind: MessageAttachment["kind"];
+  name: string | null;
+  mime: string | null;
+};
+
+function mediaOf(item: MessageAttachment): MediaSource | null {
+  return item.url
+    ? { url: item.url, kind: item.kind, name: item.name, mime: item.mime }
+    : null;
+}
+
+/** ໄຟລ໌ແນບອັນທີ `index` ຂອງຂໍ້ຄວາມແຊັດ */
+export async function messageMedia(
+  messageId: string,
+  index: number,
+  refresh = false,
+): Promise<MediaSource | null> {
+  const message = await prisma.fbMessage.findUnique({
+    where: { id: messageId },
+    select: {
+      id: true,
+      fbMessageId: true,
+      attachment: true,
+      attachments: true,
+      thread: { select: { page: { select: { token: true } } } },
+    },
+  });
+  if (!message) return null;
+
+  const stored = displayAttachments(message.attachment, message.attachments);
+  const item = stored[index];
+  if (!item) return null;
+  if (!refresh && item.url) return mediaOf(item);
+
+  const token = message.thread.page.token;
+  const config = await getFbConfig();
+  if (!token || !config) return mediaOf(item);
+
+  const fresh = await graphOne<{ attachments?: { data?: RawMessageAttachment[] } }>(
+    config.apiVersion,
+    message.fbMessageId,
+    { fields: MESSAGE_ATTACHMENT_FIELDS },
+    token,
+  );
+  const files = normalizeAttachments(fresh.attachments?.data);
+  if (files.length === 0) return mediaOf(item);
+
+  await prisma.fbMessage.update({
+    where: { id: message.id },
+    data: { attachments: files, attachment: attachmentsLabel(files) },
+  });
+
+  return mediaOf(files[index] ?? item);
+}
+
+/** ຮູບຂອງ comment (ວິດີໂອ = ຮູບປົກ) */
+export async function commentMedia(
+  commentId: string,
+  refresh = false,
+): Promise<MediaSource | null> {
+  const comment = await prisma.fbComment.findUnique({
+    where: { id: commentId },
+    select: {
+      id: true,
+      fbCommentId: true,
+      attachmentUrl: true,
+      page: { select: { token: true } },
+    },
+  });
+  if (!comment) return null;
+
+  const asMedia = (url: string | null): MediaSource | null =>
+    url ? { url, kind: "image", name: null, mime: null } : null;
+
+  if (!refresh && comment.attachmentUrl) return asMedia(comment.attachmentUrl);
+
+  const token = comment.page.token;
+  const config = await getFbConfig();
+  if (!token || !config) return asMedia(comment.attachmentUrl);
+
+  const fresh = await graphOne<{ attachment?: RawCommentAttachment }>(
+    config.apiVersion,
+    comment.fbCommentId,
+    { fields: COMMENT_ATTACHMENT_FIELDS },
+    token,
+  );
+  const attachment = normalizeCommentAttachment(fresh.attachment);
+  if (!attachment?.imageUrl) return asMedia(comment.attachmentUrl);
+
+  await prisma.fbComment.update({
+    where: { id: comment.id },
+    data: {
+      attachment: attachment.type,
+      attachmentUrl: attachment.imageUrl,
+      attachmentLink: attachment.link,
+    },
+  });
+
+  return asMedia(attachment.imageUrl);
 }

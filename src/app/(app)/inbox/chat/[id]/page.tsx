@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { InboxAttachments } from "@/components/InboxAttachment";
+import { displayAttachments, visibleText } from "@/lib/fb-attachment";
 import { formatAgo, formatTimeLao } from "@/lib/date";
 import {
   createLeadFromThread,
@@ -76,11 +78,24 @@ export default async function ChatPage({
                       : "self-start bg-[var(--surface-2)]"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap text-sm">
-                    {msg.text || (msg.attachment ? `[${msg.attachment}]` : "—")}
-                  </p>
+                  {/* ຊື່ແທນເຊັ່ນ `[image-139…]` ບໍ່ຕ້ອງໂຊ້ໃຫ້ຄົນອ່ານ —
+                      ມີຮູບແລ້ວປ່ອຍໃຫ້ຮູບເວົ້າ, ຍັງບໍ່ມີກໍ່ບອກເປັນຄຳລາວ.
+                      ບໍ່ມີທັງສອງຢ່າງຈຶ່ງຂີດ "—" */}
+                  {(() => {
+                    const files = displayAttachments(msg.attachment, msg.attachments);
+                    const text = visibleText(msg.text, files);
+                    if (!text && files.length > 0) return null;
+                    return (
+                      <p className="whitespace-pre-wrap text-sm">{text || "—"}</p>
+                    );
+                  })()}
+                  <InboxAttachments
+                    base={`/api/fb/media?msg=${msg.id}`}
+                    attachment={msg.attachment}
+                    attachments={msg.attachments}
+                  />
                   <p
-                    className={`mt-1 text-[0.68rem] ${
+                    className={`mt-1 text-2xs ${
                       msg.fromPage ? "text-white/70" : "text-[var(--fg-subtle)]"
                     }`}
                   >

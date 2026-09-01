@@ -8,10 +8,14 @@ import { formatInt } from "@/lib/format";
 import { inboxState } from "@/lib/auto-sync";
 import { getCannedReplies } from "@/lib/canned";
 import { ReplyBox } from "@/components/ReplyBox";
+import { CommentImage } from "@/components/InboxAttachment";
+import { visibleText } from "@/lib/fb-attachment";
+import { countMessagesMissingAttachments } from "@/lib/fb-inbox";
 import {
   createLeadFromComment,
   markSelectedHandled,
   pullInboxNow,
+  pullOldMedia,
   replyComment,
   setCommentHandled,
   toggleCommentHidden,
@@ -105,6 +109,7 @@ export default async function InboxPage({
     matching,
     canned,
     selected,
+    missingMedia,
   ] = await Promise.all([
     prisma.fbPage.findMany({
       orderBy: { name: "asc" },
@@ -147,6 +152,7 @@ export default async function InboxPage({
           include: COMMENT_INCLUDE,
         })
       : Promise.resolve(null),
+    countMessagesMissingAttachments(),
   ]);
 
   const linked = pages.filter((p) => p.token && p.inboxOn).length;
@@ -157,9 +163,18 @@ export default async function InboxPage({
         title="ກ່ອງຂໍ້ຄວາມ"
         description="comment ແລະ ແຊັດຂອງທຸກເພຈ — ຕອບໄດ້ຈາກບ່ອນນີ້ເລີຍ"
         action={
-          <form action={pullInboxNow}>
-            <SubmitButton pendingText="ກຳລັງດຶງ...">ດຶງດຽວນີ້</SubmitButton>
-          </form>
+          <>
+            {missingMedia > 0 ? (
+              <form action={pullOldMedia}>
+                <SubmitButton className="btn" pendingText="ກຳລັງຕື່ມ...">
+                  ຕື່ມໄຟລ໌ແນບ ({formatInt(missingMedia)})
+                </SubmitButton>
+              </form>
+            ) : null}
+            <form action={pullInboxNow}>
+              <SubmitButton pendingText="ກຳລັງດຶງ...">ດຶງດຽວນີ້</SubmitButton>
+            </form>
+          </>
         }
       />
 
@@ -361,7 +376,7 @@ export default async function InboxPage({
                             >
                               {comment.fromName ?? "ບໍ່ຮູ້ຊື່"}
                             </Link>
-                            <span className="block truncate text-[0.7rem] text-[var(--fg-subtle)]">
+                            <span className="block truncate text-2xs text-[var(--fg-subtle)]">
                               {comment.page.name}
                             </span>
                           </td>
@@ -378,7 +393,7 @@ export default async function InboxPage({
                             </Link>
                           </td>
                           <td
-                            className="whitespace-nowrap text-[0.72rem] text-[var(--fg-muted)]"
+                            className="whitespace-nowrap text-2xs text-[var(--fg-muted)]"
                             title={formatTimeLao(comment.commentedAt)}
                           >
                             {formatAgo(comment.commentedAt)}
@@ -459,7 +474,7 @@ export default async function InboxPage({
                     </td>
                     <td className="text-xs">{thread.page.name}</td>
                     <td className="max-w-72 truncate text-xs text-[var(--fg-muted)]">
-                      {thread.snippet ?? "—"}
+                      {visibleText(thread.snippet, []) ?? "—"}
                     </td>
                     <td className="num">{formatInt(thread.messageCount)}</td>
                     <td
@@ -506,6 +521,8 @@ function CommentDetail({
     fromName: string | null;
     message: string | null;
     attachment: string | null;
+    attachmentUrl: string | null;
+    attachmentLink: string | null;
     commentedAt: Date;
     parentFbId: string | null;
     hidden: boolean;
@@ -555,13 +572,24 @@ function CommentDetail({
         {comment.leadId ? <Badge tone="success">ເປັນລູກຄ້າແລ້ວ</Badge> : null}
       </div>
 
-      <p className="whitespace-pre-wrap rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-sm">
-        {comment.message || (
-          <span className="text-[var(--fg-subtle)]">
-            {comment.attachment ? "[ໄຟລ໌ແນບ]" : "(ບໍ່ມີຂໍ້ຄວາມ)"}
-          </span>
-        )}
-      </p>
+      {/* ມີຮູບຢູ່ລຸ່ມແລ້ວ ບໍ່ຕ້ອງຂຽນ "[ໄຟລ໌ແນບ]" ຊ້ຳ */}
+      {comment.message || !comment.attachmentUrl ? (
+        <p className="whitespace-pre-wrap rounded-[var(--radius-sm)] bg-[var(--surface-2)] p-2 text-sm">
+          {comment.message || (
+            <span className="text-[var(--fg-subtle)]">
+              {comment.attachment ? "[ໄຟລ໌ແນບ]" : "(ບໍ່ມີຂໍ້ຄວາມ)"}
+            </span>
+          )}
+        </p>
+      ) : null}
+
+      {comment.attachmentUrl ? (
+        <CommentImage
+          commentId={comment.id}
+          alt={comment.attachment}
+          link={comment.attachmentLink}
+        />
+      ) : null}
 
       <p className="mt-1.5 text-xs text-[var(--fg-subtle)]">
         ໃນໂພສ: {comment.post.message?.slice(0, 90) ?? "(ບໍ່ມີຂໍ້ຄວາມ)"}

@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth-server";
 import { reqStr, str } from "@/lib/form";
 import { runInboxSync } from "@/lib/auto-sync";
 import {
+  backfillMessageAttachments,
   markCommentsHandled,
   replyToComment,
   sendChatMessage,
@@ -16,6 +17,7 @@ import {
 import { explainFbError } from "@/lib/fb";
 import { todayStr, parseDate, daysAgo } from "@/lib/date";
 import { findMatchingLead, type LeadCandidate } from "@/lib/lead-match";
+import { visibleText } from "@/lib/fb-attachment";
 
 /** ດຶງກ່ອງຂໍ້ຄວາມດຽວນີ້ — ລໍຈົນຈົບ ເພາະ 1 ຮອບໃຊ້ເວລາບໍ່ດົນ */
 export async function pullInboxNow() {
@@ -23,6 +25,16 @@ export async function pullInboxNow() {
   await runInboxSync();
   revalidatePath("/inbox");
   revalidatePath("/settings");
+}
+
+/**
+ * ຕື່ມໄຟລ໌ແນບຂອງຂໍ້ຄວາມເກົ່າ — ຮອບດຶງປົກກະຕິຕື່ມໃຫ້ແຕ່ 30 ວັນຫຼ້າສຸດ
+ * ເທື່ອລະໜ້ອຍ ສ່ວນປຸ່ມນີ້ໄລ່ຍ້ອນຫຼັງບໍ່ຈຳກັດວັນ ໃນຈຳນວນທີ່ກຳນົດຕໍ່ຄັ້ງ.
+ */
+export async function pullOldMedia() {
+  await requireSession();
+  await backfillMessageAttachments({ limit: 300 });
+  revalidatePath("/inbox");
 }
 
 /** ດຶງ page token ຂອງທຸກເພຈທີ່ token ຫຼັກເຂົ້າເຖິງໄດ້ */
@@ -171,7 +183,7 @@ export async function createLeadFromThread(threadId: string) {
         name: thread.personName ?? "ບໍ່ຮູ້ຊື່",
         fbName: thread.personName,
         channel: "Messenger",
-        note: thread.snippet,
+        note: visibleText(thread.snippet, []),
       },
     }));
 
