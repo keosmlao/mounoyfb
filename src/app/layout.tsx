@@ -12,11 +12,18 @@ const notoLao = Noto_Sans_Lao({
 /**
  * `viewportFit: "cover"` ຈຳເປັນ — ຖ້າບໍ່ໃສ່ `env(safe-area-inset-*)` ຈະເປັນ 0
  * ສະເໝີໃນ iPhone ທີ່ມີຕິ່ງ/ແຖບລຸ່ມ ແລ້ວແຖບນຳທາງລຸ່ມຈໍຈະຖືກແຖບ home ບັງ.
- * ບໍ່ລັອກ `maximumScale` — ຄົນຕ້ອງຂະຫຍາຍຕາຕະລາງເບິ່ງໄດ້.
+ *
+ * ລັອກການຢິບຊູມຕາມທີ່ຜູ້ໃຊ້ຂໍ. ໝາຍເຫດ: Android Chrome ເຊື່ອຟັງ
+ * `userScalable:false` ແຕ່ **iOS Safari ບໍ່ເຊື່ອຟັງ** (ຕັ້ງແຕ່ iOS 10
+ * ເປັນຕົ້ນມາ ຫ້າມເວັບປິດການຊູມ) ຈຶ່ງຕ້ອງແກ້ການຊູມເອງຕອນແຕະຊ່ອງປ້ອນ
+ * ດ້ວຍຂະໜາດຕົວອັກສອນ 16px ຢູ່ `globals.css` ນຳ — ເບິ່ງ `.field`
+ * ໃນ `@media (pointer: coarse)`.
  */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
   viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
