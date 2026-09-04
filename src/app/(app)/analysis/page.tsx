@@ -249,7 +249,9 @@ export default async function AnalysisPage({
           </Card>
         ) : null}
 
-        <div>
+        {/* min-w-0: ຊ່ອງ grid ຕັ້ງຕົ້ນເປັນ `min-width:auto` ຈຶ່ງຖືກຕາຕະລາງ
+            ກວ້າງໆ ດັນຈົນລົ້ນຈໍ — ແລ້ວ `.table-wrap` ຈະບໍ່ໄດ້ເລື່ອນເອງ */}
+        <div className="min-w-0">
           <KindTabs active={kind} params={{ from: range.from, to: range.to }} />
 
           <Card>

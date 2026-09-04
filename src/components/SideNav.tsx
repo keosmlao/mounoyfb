@@ -168,7 +168,7 @@ export function SideNav({
           ) : null}
         </div>
 
-        <nav className="rail-scroll">
+        <nav className="rail-scroll" aria-label="ເມນູຫຼັກ">
           {GROUPS.map((group) => (
             <div key={group.title} className="rail-group">
               {wide ? <p className="rail-group-title">{group.title}</p> : null}
@@ -243,7 +243,7 @@ export function SideNav({
             className="absolute inset-0 bg-slate-950/40"
             onClick={() => setSheet(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-xl border-t border-[var(--border-strong)] bg-[var(--surface)] p-2 pb-8">
+          <div className="nav-sheet absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-xl border-t border-[var(--border-strong)] bg-[var(--surface)] p-2">
             <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--border-strong)]" />
             {GROUPS.map((group) => (
               <div key={group.title} className="mb-1.5">
@@ -283,8 +283,8 @@ export function SideNav({
         </div>
       ) : null}
 
-      {/* ມືຖື: ແຖບລຸ່ມຈໍ — ໜ້າທີ່ໃຊ້ຫຼາຍທີ່ສຸດ ຢູ່ບ່ອນນິ້ວໂປ້ເອື້ອມເຖິງ */}
-      <nav className="bottom-nav fixed inset-x-0 bottom-0 z-40 flex lg:hidden">
+      {/* ມືຖື: ແຖບລອຍມົນລຸ່ມຈໍ — ໜ້າທີ່ໃຊ້ຫຼາຍທີ່ສຸດ ຢູ່ບ່ອນນິ້ວໂປ້ເອື້ອມເຖິງ */}
+      <nav className="bottom-nav lg:hidden" aria-label="ແຖບນຳທາງລຸ່ມຈໍ">
         {BOTTOM.map((item) => {
           const active = isActive(pathname, item.href);
           const count = countOf(item.badgeKey);
@@ -303,7 +303,7 @@ export function SideNav({
                   </span>
                 ) : null}
               </span>
-              {item.label}
+              <span className="min-w-0 max-w-full truncate">{item.label}</span>
             </Link>
           );
         })}
@@ -316,7 +316,7 @@ export function SideNav({
           <span aria-hidden className="leading-none">
             <NavIcon name="menu" className="nav-svg-lg" />
           </span>
-          ເມນູ
+          <span className="min-w-0 max-w-full truncate">ເມນູ</span>
         </button>
       </nav>
 

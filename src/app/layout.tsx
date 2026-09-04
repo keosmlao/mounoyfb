@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Lao } from "next/font/google";
 import "./globals.css";
 
@@ -8,6 +8,21 @@ const notoLao = Noto_Sans_Lao({
   weight: ["400", "500", "600", "700"],
   display: "swap",
 });
+
+/**
+ * `viewportFit: "cover"` ຈຳເປັນ — ຖ້າບໍ່ໃສ່ `env(safe-area-inset-*)` ຈະເປັນ 0
+ * ສະເໝີໃນ iPhone ທີ່ມີຕິ່ງ/ແຖບລຸ່ມ ແລ້ວແຖບນຳທາງລຸ່ມຈໍຈະຖືກແຖບ home ບັງ.
+ * ບໍ່ລັອກ `maximumScale` — ຄົນຕ້ອງຂະຫຍາຍຕາຕະລາງເບິ່ງໄດ້.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#14171c" },
+  ],
+};
 
 export const metadata: Metadata = {
   title: "FBMONOY — ລະບົບຈັດການການຍິງໂຄສະນາ Facebook",

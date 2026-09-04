@@ -52,6 +52,10 @@
   /* ມຸມມົນໜ້ອຍ — ເຄື່ອງມືເຮັດວຽກ ບໍ່ແມ່ນແອັບຫຼິ້ນ */
   --radius: 6px;
   --radius-sm: 5px;
+  /* ແຖບນຳທາງລອຍລຸ່ມຈໍ — ໃຊ້ຮ່ວມກັນລະຫວ່າງ `.bottom-nav` (ຕັ້ງຂະໜາດ)
+     ກັບ `.app-main` (ເວັ້ນທີ່ລຸ່ມ) ຈຶ່ງບໍ່ຕ້ອງເດົາເລກສອງບ່ອນ */
+  --bottom-nav-gap: 0.7rem;
+  --bottom-nav-h: 3.55rem;
 
   /* ຄວາມກວ້າງແຖບເຄື່ອງມືດ້ານຂ້າງ */
   --rail: 4.5rem;
@@ -233,6 +237,10 @@ h1, h2, h3 {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    /* ກາດສ່ວນຫຼາຍເປັນຊ່ອງຂອງ grid ຊຶ່ງຕັ້ງຕົ້ນເປັນ `min-width:auto` —
+       ຕາຕະລາງກວ້າງໆຂ້າງໃນຈຶ່ງດັນກາດຈົນລົ້ນຈໍແທນທີ່ `.table-wrap`
+       ຈະເລື່ອນເອງ. ບີບເປັນ 0 ໄວ້ ຈຶ່ງເລື່ອນຢູ່ໃນກາດຄືເກົ່າ. */
+    min-width: 0;
   }
   .card-header {
     background: var(--surface-2);
@@ -549,6 +557,21 @@ h1, h2, h3 {
 .app-shell {
   background: var(--bg);
 }
+/* ຄອມມີແຖບຂ້າງ (`lg:pl-[var(--rail)]`) ຢູ່ແລ້ວ ຈຶ່ງເວັ້ນສະເພາະມືຖື */
+@media (max-width: 1023px) {
+  .app-shell {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  /* ເວັ້ນລຸ່ມໃຫ້ພົ້ນແຖບລອຍ = ໄລຍະຫ່າງ + ຄວາມສູງແຖບ + ໄລຍະຫາຍໃຈ
+     ບວກແຖບ home ຂອງເຄື່ອງນຳ ບໍ່ດັ່ງນັ້ນແຖວສຸດທ້າຍຈະຖືກແຖບບັງ */
+  .app-main {
+    padding-bottom: calc(
+      var(--bottom-nav-gap) * 2 + var(--bottom-nav-h) + 0.75rem +
+        env(safe-area-inset-bottom)
+    );
+  }
+}
 
 /* ------------------------------------------------- ແຖບຂ້າງ (ຄອມ) */
 /* ຄວາມກວ້າງມາຈາກ `--rail` ທີ່ SideNav ຕັ້ງໃສ່ <html> —
@@ -758,7 +781,10 @@ h1, h2, h3 {
   align-items: center;
   gap: 0.5rem;
   min-height: 2.75rem;
-  padding: 0 0.6rem;
+  /* ຈໍຕະແຄງຂອງ iPhone ມີຕິ່ງກິນຂອບຂ້າງ — `viewport-fit=cover` ຢູ່
+     `layout.tsx` ເປີດໃຫ້ເນື້ອຫາລອດໃຕ້ຕິ່ງໄດ້ ຈຶ່ງຕ້ອງເວັ້ນຂ້າງເອງ */
+  padding: 0 max(0.6rem, env(safe-area-inset-right)) 0
+    max(0.6rem, env(safe-area-inset-left));
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--border);
@@ -815,41 +841,67 @@ h1, h2, h3 {
   }
 }
 
-/* ແຖບນຳທາງລຸ່ມຈໍ (ໂທລະສັບ) — ຫຼີກ gesture bar ຂອງ Android */
+/* ແຖບນຳທາງລຸ່ມຈໍ (ໂທລະສັບ) — **ແຖບລອຍມົນ** ບໍ່ຕິດຂອບຈໍ
+   ເນື້ອຫາເລື່ອນຢູ່ໃຕ້ມັນ ຈຶ່ງໃຊ້ພື້ນເຄິ່ງໂປ່ງ + blur ໃຫ້ຍັງອ່ານແຖບອອກ.
+   ໄລຍະຫ່າງລຸ່ມບວກ safe area ໄວ້ ຈຶ່ງລອຍພົ້ນແຖບ home ຂອງ iPhone
+   ແລະ gesture bar ຂອງ Android. ຄວາມສູງລວມເກັບໄວ້ `--bottom-nav-h`
+   ໃຫ້ `.app-main` ເອົາໄປເວັ້ນທີ່ຢູ່ລຸ່ມ — ບໍ່ຕ້ອງເດົາເລກສອງບ່ອນ. */
 .bottom-nav {
-  background: color-mix(in srgb, var(--surface) 94%, transparent);
-  border-top: 1px solid var(--border);
-  backdrop-filter: blur(12px);
-  padding-bottom: env(safe-area-inset-bottom);
+  position: fixed;
+  z-index: 40;
+  /* ຄຸມ display ຢູ່ນີ້ເອງ ຄືກັບ `.rail`/`.topbar` — ໄຟລ໌ນີ້ຢູ່ນອກ @layer
+     ຈຶ່ງຊະນະ utility ຂອງ Tailwind ສະເໝີ */
+  display: flex;
+  left: max(var(--bottom-nav-gap), env(safe-area-inset-left));
+  right: max(var(--bottom-nav-gap), env(safe-area-inset-right));
+  bottom: calc(var(--bottom-nav-gap) + env(safe-area-inset-bottom));
+  gap: 0.15rem;
+  padding: 0.28rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow:
+    0 10px 26px rgb(15 23 42 / 0.16),
+    0 2px 6px rgb(15 23 42 / 0.08);
+}
+@media (min-width: 1024px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+
+/* ແຜ່ນເມນູເຕັມ (ມືຖື) — ເວັ້ນລຸ່ມໃຫ້ພົ້ນແຖບ home ຂອງ iPhone */
+.nav-sheet {
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom));
 }
 .bottom-nav-item {
   position: relative;
   flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.1rem;
-  min-height: 3.2rem;
-  padding: 0.3rem 0.2rem;
+  min-height: var(--bottom-nav-h);
+  padding: 0.25rem 0.1rem;
+  /* ມົນຕາມແຖບ ຈຶ່ງບໍ່ມີແຈຍື່ນອອກນອກຂອບຕອນກົດ */
+  border-radius: 999px;
   color: var(--fg-subtle);
   font-size: var(--text-2xs);
   font-weight: 600;
   line-height: 1.2;
+  /* ຄຳລາວຍາວກວ່າຊ່ອງບໍ່ໃຫ້ຕັດແຖວ — ຫຍໍ້ດ້ວຍ … ແທນ */
+  white-space: nowrap;
 }
 .bottom-nav-item:active {
   background: var(--surface-2);
 }
+/* ໜ້າທີ່ຢູ່ປັດຈຸບັນ = ເມັດມົນສີແບຣນ (ແຖບຂີດເທິງບໍ່ເຂົ້າກັບແຖບມົນ) */
 .bottom-nav-active {
   color: var(--brand);
-}
-.bottom-nav-active::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  width: 1.8rem;
-  height: 2px;
-  background: var(--brand);
+  background: var(--brand-soft);
 }
 
 /* ---------------------------------------------------------------
