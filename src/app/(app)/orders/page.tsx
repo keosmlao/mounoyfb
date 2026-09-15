@@ -59,6 +59,7 @@ export default async function OrdersPage({
         include: {
           campaign: { select: { id: true, name: true } },
           product: { select: { name: true } },
+          items: { select: { code: true, quantity: true } },
         },
       }),
       prisma.order.count({ where }),
@@ -222,7 +223,11 @@ export default async function OrdersPage({
                             <div className="text-xs text-[var(--fg-subtle)]">{order.phone ?? "—"}</div>
                           </td>
                           <td className="max-w-52 text-xs">
-                            <div className="truncate">{order.product?.name ?? "ບໍ່ລະບຸສິນຄ້າ"}</div>
+                            <div className="truncate">
+                              {order.items.length > 1
+                                ? order.items.map((i) => `${i.code ?? ""}×${i.quantity}`).join(" · ")
+                                : (order.product?.name ?? "ບໍ່ລະບຸສິນຄ້າ")}
+                            </div>
                             <div className="truncate text-[var(--fg-subtle)]">{order.campaign?.name ?? "Organic / ບໍ່ລະບຸ"}</div>
                           </td>
                           <td className="num">{money(order.saleAmount)}</td>

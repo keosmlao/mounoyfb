@@ -139,26 +139,36 @@ model FbPage {
   posts     FbPost[]
   comments  FbComment[]
   threads   FbThread[]
+  lives     LiveSession[]
+  products  Product[]
 }
 
 /// ສິນຄ້າ / ອອບເຟີ ທີ່ຍິງໂຄສະນາ — ໃຊ້ຄິດກຳໄລ ແລະ ROAS
 model Product {
-  id        String   @id @default(cuid())
-  name      String
-  sku       String?  @unique
+  id          String   @id @default(cuid())
+  name        String
+  sku         String?  @unique
   /// ລາຄາຂາຍ (ສະກຸນຫຼັກ = LAK)
-  price     Float    @default(0)
+  price       Float    @default(0)
   /// ຕົ້ນທຶນ (ສະກຸນຫຼັກ = LAK)
-  cost      Float    @default(0)
-  imageUrl  String?
-  active    Boolean  @default(true)
-  note      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  cost        Float    @default(0)
+  /// ລິ້ງຮູບ — ຖ້າມາຈາກ Facebook (`fbPhotoId`) ລິ້ງນີ້ **ໝົດອາຍຸໄດ້**
+  /// ຈຶ່ງສະແດງຜ່ານ `/api/products/[id]/image` ທີ່ຂໍລິ້ງໃໝ່ໃຫ້ເອງ
+  imageUrl    String?
+  /// ຮູບໃນເພຈທີ່ສ້າງສິນຄ້ານີ້ມາ — unique ກັນດຶງຮູບດຽວກັນເປັນສິນຄ້າຊ້ຳ
+  fbPhotoId   String?  @unique
+  photoPageId String?
+  active      Boolean  @default(true)
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  campaigns Campaign[]
-  leads     Lead[]
-  orders    Order[]
+  campaigns  Campaign[]
+  leads      Lead[]
+  orders     Order[]
+  orderItems OrderItem[]
+  liveItems  LiveItem[]
+  photoPage  FbPage?     @relation(fields: [photoPageId], references: [id], onDelete: SetNull)
 }
 
 // ---------------------------------------------------------------------------
@@ -419,17 +429,202 @@ model Order {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  lead     Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
-  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  adSet    AdSet?    @relation(fields: [adSetId], references: [id], onDelete: SetNull)
-  ad       Ad?       @relation(fields: [adId], references: [id], onDelete: SetNull)
+  // --- ບິນຈາກ live — ວ່າງສຳລັບ Order ທີ່ປ້ອນມື/ນຳເຂົ້າ ---
+  liveSessionId String?
+  /// id ຂອງຄົນທີ່ comment ໃນ live (ບໍ່ແມ່ນ PSID ຂອງ Messenger)
+  fbCustomerId  String?
+  /// ສົ່ງສະຫຼຸບຍອດຫາລູກຄ້າທາງ private reply ແລ້ວ
+  notifiedAt    DateTime?
+  notifyError   String?
+
+  lead        Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  campaign    Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adSet       AdSet?       @relation(fields: [adSetId], references: [id], onDelete: SetNull)
+  ad          Ad?          @relation(fields: [adId], references: [id], onDelete: SetNull)
+  liveSession LiveSession? @relation(fields: [liveSessionId], references: [id], onDelete: SetNull)
+
+  /// ລາຍການສິນຄ້າ — ມີສະເພາະບິນທີ່ມີຫຼາຍລາຍການ (ບິນຈາກ live).
+  /// Order ທົ່ວໄປໃຊ້ `productId` + `quantity` ຄືເກົ່າ ແລະ ຍອດເງິນຢູ່ `saleAmount` ສະເໝີ
+  items      OrderItem[]
+  liveClaims LiveClaim[]
 
   @@index([date])
   @@index([status, date])
   @@index([campaignId, date])
   @@index([productId, date])
   @@index([leadId])
+  @@index([liveSessionId])
+}
+
+/// ແຖວສິນຄ້າໃນ Order — ລາຄາ/ຕົ້ນທຶນ snapshot ຕອນອອກບິນ.
+/// ຜົນລວມຂອງແຖວຖືກຂຽນໃສ່ `Order.saleAmount/productCost` ແລ້ວ —
+/// ລາຍງານອ່ານຈາກ Order ຢ່າງດຽວ ຫ້າມບວກຈາກບ່ອນນີ້ຊ້ຳ.
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String?
+  /// ລະຫັດໃນ live ເຊັ່ນ "A1"
+  code      String?
+  name      String
+  quantity  Int     @default(1)
+  unitPrice Float   @default(0)
+  unitCost  Float   @default(0)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ---------------------------------------------------------------------------
+// ຂາຍຜ່ານ live — ລູກຄ້າ comment "CF <ລະຫັດ>" ເພື່ອຈອງ
+// ---------------------------------------------------------------------------
+
+enum LiveStatus {
+  DRAFT // ຕັ້ງສິນຄ້າໄວ້ ຍັງບໍ່ເລີ່ມເກັບ
+  LIVE // ກຳລັງເກັບ CF ຈາກ comment
+  ENDED // ຢຸດເກັບແລ້ວ — ອອກບິນ ແລະ ສົ່ງສະຫຼຸບຍອດໄດ້
+}
+
+/// 1 ຮອບ live = 1 ວິດີໂອ ພ້ອມຊຸດລະຫັດສິນຄ້າຂອງຮອບນັ້ນ
+model LiveSession {
+  id        String     @id @default(cuid())
+  pageId    String
+  title     String
+  /// ວັນທີ່ຂອງ Order ທີ່ອອກຈາກ live ນີ້
+  date      DateTime   @db.Date
+  status    LiveStatus @default(DRAFT)
+  /// id ວິດີໂອທີ່ມີ comment (object ທີ່ຮ້ອງ `/{id}/comments`)
+  fbVideoId String?    @unique
+  permalink String?
+  note      String?
+
+  /// ເວລາທີ່ດຶງ comment ຄັ້ງຫຼ້າສຸດ — ໃຊ້ກັນຫຼາຍໜ້າຈໍດຶງຊ້ອນກັນ
+  pollAt       DateTime?
+  pollError    String?
+  /// ເວລາຂອງ comment ໃໝ່ສຸດທີ່ເຄີຍເຫັນ — ຮອບຕໍ່ໄປໄລ່ໜ້າຍ້ອນຫຼັງຮອດແຕ່ນີ້
+  cursorAt     DateTime?
+  /// ຈຳນວນ comment ທັງໝົດທີ່ອ່ານແລ້ວ (ລວມອັນທີ່ບໍ່ແມ່ນ CF)
+  commentsSeen Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// ຕອບຮັບໃຕ້ comment CF ອັດຕະໂນມັດ ("✅ ຮັບ A1 ແລ້ວ" / "⏳ ຄິວ #2")
+  autoAck  Boolean @default(false)
+  /// ເຊື່ອງ comment ທີ່ມີລິ້ງ ຫຼື ເບີໂທ ອັດຕະໂນມັດ
+  autoHide Boolean @default(false)
+
+  page     FbPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  items    LiveItem[]
+  claims   LiveClaim[]
+  orders   Order[]
+  comments LiveComment[]
+
+  @@index([status])
+  @@index([date])
+}
+
+/// comment ທຸກອັນຂອງ live (ລວມຄຳຕອບຂອງເພຈ) — ແຍກຈາກ `FbComment`
+/// ບໍ່ດັ່ງນັ້ນ comment ຫຼາຍພັນອັນຂອງ live ຈະຖົມກ່ອງຂໍ້ຄວາມຫຼັກ.
+/// `handled` / `privateRepliedAt` ເປັນຂອງຄົນ — ຮອບດຶງຫ້າມທັບ
+model LiveComment {
+  id          String   @id @default(cuid())
+  sessionId   String
+  fbCommentId String   @unique
+  /// ຄຳຕອບໃຕ້ comment ອື່ນ
+  parentFbId  String?
+  fromId      String?
+  fromName    String?
+  message     String?
+  commentedAt DateTime
+  fromPage    Boolean  @default(false)
+
+  isCf       Boolean @default(false)
+  isQuestion Boolean @default(false)
+  /// "link" | "phone" — ເຫດທີ່ຖືກຈັດວ່າກວນ
+  spam       String?
+  hidden     Boolean @default(false)
+
+  handled          Boolean   @default(false)
+  handledAt        DateTime?
+  /// ຕອບເຂົ້າ Messenger ແລ້ວ — Facebook ໃຫ້ 1 ເທື່ອຕໍ່ comment
+  /// ສະຫຼຸບຍອດຈຶ່ງຕ້ອງຂ້າມ comment ນີ້
+  privateRepliedAt DateTime?
+  /// ຈອງສິດຕອບຮັບ CF ແລ້ວ (ສຳເລັດ ຫຼື ລົ້ມ — ເບິ່ງ ackError) ບໍ່ລອງຊ້ຳ
+  ackedAt          DateTime?
+  ackError         String?
+  /// ຈອງສິດເຊື່ອງອັດຕະໂນມັດແລ້ວ — ຄືກັນ ບໍ່ລອງຊ້ຳ
+  autoHideAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, commentedAt])
+  @@index([parentFbId])
+}
+
+/// ສິນຄ້າໃນ live ນັ້ນ — ລະຫັດຕັ້ງໃໝ່ທຸກຮອບ
+model LiveItem {
+  id        String  @id @default(cuid())
+  sessionId String
+  /// ລະຫັດທີ່ລູກຄ້າພິມ (ຕົວໃຫຍ່ ບໍ່ມີຍະຫວ່າງ) ເຊັ່ນ "A1"
+  code      String
+  productId String?
+  name      String
+  /// ລາຄາຂາຍໃນ live (LAK)
+  price     Float   @default(0)
+  cost      Float   @default(0)
+  /// ຈຳນວນທີ່ມີ — null = ບໍ່ຈຳກັດ
+  stock     Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  product Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  claims  LiveClaim[]
+
+  @@unique([sessionId, code])
+}
+
+/// 1 ລາຍການຈອງ = 1 ລະຫັດໃນ 1 comment ("CF A1 B3" = 2 ແຖວ).
+/// ສະຖານະ ຈອງໄດ້/ລໍຄິວ **ບໍ່ເກັບ** — ຄິດໃໝ່ທຸກເທື່ອດ້ວຍ `allocateClaims()`
+model LiveClaim {
+  id          String   @id @default(cuid())
+  sessionId   String
+  /// null = ມີ CF ແຕ່ອ່ານລະຫັດບໍ່ອອກ — ລໍຄົນເລືອກສິນຄ້າໃຫ້
+  itemId      String?
+  fbCommentId String
+  /// ລຳດັບແຖວໃນ comment ນັ້ນ — ກັບ fbCommentId ເປັນ key ກັນບັນທຶກຊ້ຳ
+  line        Int      @default(0)
+  fromId      String?
+  fromName    String?
+  message     String?
+  quantity    Int      @default(1)
+  commentedAt DateTime
+
+  /// ຍົກເລີກໂດຍຄົນ ຫຼື ລະບົບໝາຍວ່າ comment ຊ້ຳ (ຄືນໄດ້)
+  cancelled    Boolean @default(false)
+  cancelReason String?
+  /// ອອກບິນແລ້ວ — ຫ້າມຍົກເລີກຈາກໜ້າ live ອີກ ຕ້ອງໄປແກ້ຢູ່ Order
+  orderId      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  item    LiveItem?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  order   Order?      @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@unique([fbCommentId, line])
+  @@index([sessionId, commentedAt])
+  @@index([itemId])
+  @@index([orderId])
 }
 
 // ---------------------------------------------------------------------------

@@ -107,6 +107,10 @@ test("ຂໍ້ຜິດພາດ Facebook ຖືກແປເປັນວິທ�
   assert.match(explainFbError(new Error("Facebook API: x (code 190)")), /ໝົດອາຍຸ/);
   assert.match(explainFbError(new Error("Facebook API: y (code 4)")), /rate limit/);
   assert.match(explainFbError(new Error("Facebook API: z (code 100)")), /ຖືກລຶບ/);
+  assert.match(
+    explainFbError(new Error("Facebook API: (#10) To use live-video-api on behalf of people who are not admins (code 10)")),
+    /App roles/,
+  );
   assert.match(explainFbError(new Error("needs ads_management")), /ads_management/);
   assert.match(
     explainFbError(new Error("requires pages_messaging permission")),

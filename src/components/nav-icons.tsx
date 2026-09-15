@@ -12,6 +12,7 @@
 export type IconName =
   | "home"
   | "inbox"
+  | "live"
   | "queue"
   | "orders"
   | "leads"
@@ -46,6 +47,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   // ລາຍການມີເຄື່ອງໝາຍຖືກ + ໂມງ — "ວຽກທີ່ລໍຢູ່"
+  live: (
+    <>
+      <circle cx="12" cy="12" r="2.2" />
+      <path d="M8.2 15.8a5.4 5.4 0 0 1 0-7.6M15.8 8.2a5.4 5.4 0 0 1 0 7.6" />
+      <path d="M5.3 18.7a9.5 9.5 0 0 1 0-13.4M18.7 5.3a9.5 9.5 0 0 1 0 13.4" />
+    </>
+  ),
   queue: (
     <>
       <path d="M4 6.5h9M4 12h6M4 17.5h5" />

@@ -320,6 +320,27 @@ async function tickAutoInbox(): Promise<void> {
   }
 }
 
+// ------------------------------------------------------------- CF ຕອນ live
+
+let liveTicking = false;
+
+/**
+ * live ທີ່ກຳລັງເກັບ CF — ດຶງຕໍ່ທຸກນາທີເຖິງບໍ່ມີໃຜເປີດໜ້າ live ໄວ້.
+ * ໜ້າຈໍທີ່ເປີດຢູ່ດຶງຖີ່ກວ່ານີ້ເອງ (`/api/live/[id]/poll`) — ບ່ອນນີ້ເປັນຕາໜ່າງກັນຕົກ.
+ */
+async function tickLive(): Promise<void> {
+  if (liveTicking) return;
+  liveTicking = true;
+  try {
+    const { pullActiveLives } = await import("./live-server");
+    await pullActiveLives();
+  } catch (error) {
+    console.error("[live]", error);
+  } finally {
+    liveTicking = false;
+  }
+}
+
 // --------------------------------------------------- ກວດອາຍຸ token ເປັນໄລຍະ
 
 /**
@@ -358,6 +379,7 @@ export function startAutoSyncScheduler(): void {
     await tickTokenCheck();
     await tickAutoSync();
     await tickAutoInbox();
+    await tickLive();
   };
 
   const first = setTimeout(() => void tick(), FIRST_TICK_MS);

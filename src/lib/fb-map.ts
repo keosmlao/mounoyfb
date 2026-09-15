@@ -144,6 +144,13 @@ export function explainFbError(error: unknown): string {
       "ສ້າງ token ໃໝ່ໃຫ້ມີສິດນີ້ ແລ້ວໃສ່ຄືນຢູ່ໜ້າຕັ້ງຄ່າ ແລະ ກົດ “ເຊື່ອມເພຈກັບ Facebook” ອີກເທື່ອ"
     );
   }
+  if (message.includes("live-video-api")) {
+    return (
+      "Facebook ບໍ່ໃຫ້ token ນີ້ໃຊ້ Live Video API (code 10) — ບັນຊີ Facebook ທີ່ສ້າງ token " +
+      "ຍັງບໍ່ມີບົດບາດໃນແອັບ. ວິທີແກ້: ໄປ developers.facebook.com → ແອັບຂອງເຮົາ → App roles " +
+      "ເພີ່ມບັນຊີນັ້ນເປັນ Admin/Developer ແລ້ວສ້າງ token ໃໝ່ — ຫຼື ວາງລິ້ງວິດີໂອ live ເອງແທນການເລືອກຈາກລາຍການ"
+    );
+  }
   if (message.includes("pages_manage_engagement")) {
     return "token ຂາດສິດ pages_manage_engagement — ຕອບ/ເຊື່ອງ comment ບໍ່ໄດ້";
   }

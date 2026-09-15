@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Card, CardHeader, Field, PageHeader } from "@/components/ui";
 import { DeleteButton, SubmitButton } from "@/components/SubmitButton";
-import { deleteProduct, updateProduct } from "../actions";
+import { deleteProduct, unlinkProductPhoto, updateProduct } from "../actions";
+import { ProductThumb } from "@/components/ProductThumb";
 
 export const dynamic = "force-dynamic";
 
@@ -49,13 +50,19 @@ export default async function EditProductPage({
             <Field label="ລະຫັດ (SKU)">
               <input name="sku" defaultValue={product.sku ?? ""} className="field" />
             </Field>
-            <Field label="ລິ້ງຮູບ">
-              <input
-                name="imageUrl"
-                defaultValue={product.imageUrl ?? ""}
-                className="field"
-              />
-            </Field>
+            {product.fbPhotoId ? (
+              <Field label="ຮູບ" hint="ຮູບຈາກເພຈ — ລະບົບຂໍລິ້ງໃໝ່ໃຫ້ເອງເມື່ອໝົດອາຍຸ">
+                <ProductThumb product={product} size="h-16 w-16" />
+              </Field>
+            ) : (
+              <Field label="ລິ້ງຮູບ">
+                <input
+                  name="imageUrl"
+                  defaultValue={product.imageUrl ?? ""}
+                  className="field"
+                />
+              </Field>
+            )}
             <Field label="ລາຄາຂາຍ (ກີບ)">
               <input
                 name="price"
@@ -98,6 +105,15 @@ export default async function EditProductPage({
             </div>
           </form>
         </Card>
+
+        {product.fbPhotoId ? (
+          <Card>
+            <CardHeader title="ຮູບຈາກເພຈ" subtitle="ເອົາອອກແລ້ວໃສ່ລິ້ງຮູບເອງໄດ້" />
+            <form action={unlinkProductPhoto.bind(null, id)} className="p-4">
+              <SubmitButton className="btn btn-sm" pendingText="...">ເອົາຮູບຈາກເພຈອອກ</SubmitButton>
+            </form>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader

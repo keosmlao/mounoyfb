@@ -111,4 +111,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **ເງື່ອນໄຂກັ່ນຕອງລາຍການຢູ່ `list-filters.ts` ບ່ອນດຽວ** — ໜ້າຈໍກັບໄຟລ໌ CSV
   ທີ່ສົ່ງອອກຕ້ອງໄດ້ແຖວອັນດຽວກັນ. `toCsv()` ໃສ່ BOM ໃຫ້ ບໍ່ດັ່ງນັ້ນ Excel
   ອ່ານພາສາລາວເປັນຕົວຂີ້ເຫຍື້ອ.
+- **ຂາຍຜ່ານ live (CF) — `/live`** ກົດຢູ່ `src/lib/live-cf.ts` (ບໍລິສຸດ · ມີ test ຄຸມ)
+  ການອ່ານ/ຂຽນ ແລະ Facebook ຢູ່ `live-server.ts`. **ສະຖານະ ຈອງໄດ້/ລໍຄິວ ບໍ່ເກັບ** —
+  ຄິດໃໝ່ທຸກເທື່ອດ້ວຍ `allocateClaims()` ຕາມເວລາ comment ຂອງ Facebook
+  (ຢ່າເພີ່ມຄໍລຳສະຖານະ ບໍ່ດັ່ງນັ້ນຄິວຈະບໍ່ເລື່ອນເມື່ອມີຄົນຍົກເລີກ). ລາຍການທີ່ອອກບິນ
+  ແລ້ວ (`orderId`) ໄດ້ຂອງກ່ອນສະເໝີ ແລະ ແກ້ຈາກໜ້າ live ບໍ່ໄດ້. comment ຂອງ live
+  **ບໍ່ລົງ `FbComment`** (ຈະຖົມກ່ອງຂໍ້ຄວາມ). ບິນ live ມີ `OrderItem` ແຕ່ຍອດເງິນ
+  ຢູ່ `Order.saleAmount/productCost` ສະເໝີ — ລາຍງານຫ້າມບວກຈາກ `OrderItem` ຊ້ຳ.
+  ສະຫຼຸບຍອດສົ່ງຜ່ານ Send API `recipient.comment_id` (1 ເທື່ອຕໍ່ comment · 7 ວັນ) —
+  comment ທີ່ມີ `LiveComment.privateRepliedAt` ແລ້ວໃຊ້ຊ້ຳບໍ່ໄດ້ ຕ້ອງຂ້າມ.
+  comment ທຸກອັນຂອງ live ຢູ່ `LiveComment` (ຈັດປະເພດໃນ `live-comments.ts` ບໍລິສຸດ).
+  ຕອບຮັບ CF / ເຊື່ອງອັດຕະໂນມັດ **ຈອງສິດດ້ວຍ `updateMany … ackedAt/autoHideAt: null`
+  ກ່ອນຮ້ອງ Facebook** ເພາະຮອບດຶງຊ້ອນກັນໄດ້ (ຫຼາຍແທັບ + ຕົວຕັ້ງເວລາ) — ລົ້ມແລ້ວບໍ່ລອງຊ້ຳ.
+  `/{page}/live_videos` ຖືກ Facebook ກັນ (code 10 live-video-api) ຈຶ່ງມີທາງສຳຮອງ `/{page}/videos`.
+  ວິເຄາະ live ຢູ່ `live-analysis.ts` (ບໍລິສຸດ · ມີເກນຂໍ້ມູນຂັ້ນຕ່ຳທຸກຄຳແນະນຳ).
 - **ຢ່າ deploy ອອກອິນເຕີເນັດແບບ http** — ຕັ້ງ `COOKIE_SECURE=1` ພ້ອມ HTTPS ກ່ອນ.

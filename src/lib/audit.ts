@@ -23,6 +23,8 @@ export type AuditAction =
   | "product.delete"
   | "adaccount.delete"
   | "fbpage.delete"
+  | "live.delete"
+  | "live.notify"
   | "settings.token"
   | "settings.user";
 
@@ -60,6 +62,8 @@ export const AUDIT_LABEL: Record<string, string> = {
   "product.delete": "ລຶບສິນຄ້າ",
   "adaccount.delete": "ລຶບບັນຊີໂຄສະນາ",
   "fbpage.delete": "ລຶບເພຈ",
+  "live.delete": "ລຶບຮອບ live",
+  "live.notify": "ສົ່ງສະຫຼຸບຍອດ live ຫາລູກຄ້າ",
   "settings.token": "ປ່ຽນ token / ຄ່າເຊື່ອມຕໍ່",
   "settings.user": "ຈັດການຜູ້ໃຊ້",
 };

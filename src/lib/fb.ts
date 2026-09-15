@@ -77,7 +77,7 @@ export async function getFbConfig(): Promise<FbConfig | null> {
   return accessToken ? { accessToken, apiVersion } : null;
 }
 
-type GraphError = {
+export type GraphError = {
   message: string;
   type?: string;
   code: number;
@@ -111,7 +111,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function graphErrorOf(error: GraphError): Error {
+export function graphErrorOf(error: GraphError): Error {
   const detail = error.error_user_msg ?? error.message;
   return new Error(`Facebook API: ${detail} (code ${error.code})`);
 }
@@ -122,7 +122,7 @@ function graphErrorOf(error: GraphError): Error {
  * ກ່ອນນີ້ການດຶງຍ້ອນຫຼັງຍາວໆ ພໍຊົນ rate limit ກາງທາງແມ່ນ **ລົ້ມທັງວຽກ**
  * ແລ້ວຕ້ອງເລີ່ມໃໝ່ຕັ້ງແຕ່ຕົ້ນ — ເສຍທັງເວລາ ແລະ ໂຄຕ້າທີ່ໃຊ້ໄປແລ້ວ.
  */
-async function graphFetch<T>(
+export async function graphFetch<T>(
   url: string,
   init?: RequestInit,
 ): Promise<T & { error?: GraphError }> {

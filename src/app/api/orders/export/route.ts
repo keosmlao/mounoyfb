@@ -56,6 +56,7 @@ export async function GET(request: Request) {
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     include: {
       campaign: { select: { name: true } },
+      items: { select: { name: true, quantity: true } },
       product: { select: { name: true } },
     },
   });
@@ -68,7 +69,10 @@ export async function GET(request: Request) {
       o.customerName,
       o.phone ?? "",
       o.channel ?? "",
-      o.product?.name ?? "",
+      // ບິນຈາກ live ມີຫຼາຍລາຍການ — ຂຽນລົງຊ່ອງດຽວ ຈຳນວນຢູ່ຖັດໄປແມ່ນຍອດລວມ
+      o.items.length > 1
+        ? o.items.map((i) => `${i.name} x${i.quantity}`).join("; ")
+        : (o.product?.name ?? ""),
       o.quantity,
       o.campaign?.name ?? "",
       ORDER_STATUS_LABEL[o.status],

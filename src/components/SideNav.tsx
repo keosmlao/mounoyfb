@@ -21,6 +21,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/", label: "ໜ້າຫຼັກ", icon: "home" },
       { href: "/inbox", label: "ຂໍ້ຄວາມ", icon: "inbox", badgeKey: "inbox" },
+      { href: "/live", label: "ຂາຍຜ່ານ live", icon: "live" },
       { href: "/queue", label: "ຄິວວຽກ", icon: "queue" },
       { href: "/orders", label: "ອໍເດີ", icon: "orders" },
       { href: "/leads", label: "ລູກຄ້າ", icon: "leads" },

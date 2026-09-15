@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { Badge, Card, CardHeader, EmptyState, Field, PageHeader } from "@/components/ui";
 import { SubmitButton } from "@/components/SubmitButton";
+import { ProductThumb } from "@/components/ProductThumb";
 import { createProduct } from "./actions";
 import { formatInt, formatPercent, safeDiv } from "@/lib/format";
 import { loadMoney } from "@/lib/money-server";
@@ -20,6 +21,11 @@ export default async function ProductsPage() {
       <PageHeader
         title="ສິນຄ້າ / ອອບເຟີ"
         description="ຜູກກັບແຄມເປນ ເພື່ອຄິດກຳໄລ ແລະ ROAS ໄດ້ຖືກຕ້ອງ"
+        action={
+          <Link href="/products/from-page" className="btn">
+            ສ້າງຈາກຮູບໃນເພຈ
+          </Link>
+        }
       />
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -50,10 +56,13 @@ export default async function ProductsPage() {
                     return (
                       <tr key={p.id}>
                         <td className="font-medium">
-                          {p.name}{" "}
-                          {!p.active ? (
-                            <Badge tone="neutral">ປິດໃຊ້</Badge>
-                          ) : null}
+                          <div className="flex items-center gap-2">
+                            <ProductThumb product={p} />
+                            <span>{p.name}</span>
+                            {!p.active ? (
+                              <Badge tone="neutral">ປິດໃຊ້</Badge>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="text-[var(--fg-muted)]">{p.sku ?? "—"}</td>
                         <td className="num">{money(p.price)}</td>

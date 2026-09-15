@@ -4,6 +4,7 @@ import type {
   EntityStatus,
   InsightLevel,
   LeadStatus,
+  LiveStatus,
   OrderStatus,
 } from "@/generated/prisma/enums";
 
@@ -78,6 +79,18 @@ export const ORDER_STATUS_TONE: Record<OrderStatus, string> = {
   DELIVERED: "success",
   RETURNED: "danger",
   CANCELLED: "neutral",
+};
+
+export const LIVE_STATUS_LABEL: Record<LiveStatus, string> = {
+  DRAFT: "ກຽມສິນຄ້າ",
+  LIVE: "ກຳລັງເກັບ CF",
+  ENDED: "ຢຸດເກັບແລ້ວ",
+};
+
+export const LIVE_STATUS_TONE: Record<LiveStatus, string> = {
+  DRAFT: "neutral",
+  LIVE: "danger",
+  ENDED: "success",
 };
 
 export const LEAD_CHANNELS = [
