@@ -859,10 +859,15 @@ export async function sendPrivateReply(commentId: string, message: string) {
   if (!config) throw new Error("ຍັງບໍ່ໄດ້ຕັ້ງ Facebook access token");
   const page = await pageToken(comment.pageId);
 
+  // Send API ກັບ `recipient.comment_id` ຄືວິທີປັດຈຸບັນຂອງ Facebook —
+  // `/{comment}/private_replies` ເກົ່າຖືກເລີກໃຊ້ແລ້ວ (ຄືກັບທີ່ລະບົບ live ໃຊ້)
   await graphPost(
     config.apiVersion,
-    `${comment.fbCommentId}/private_replies`,
-    { message },
+    `${page.fbPageId}/messages`,
+    {
+      recipient: JSON.stringify({ comment_id: comment.fbCommentId }),
+      message: JSON.stringify({ text: message }),
+    },
     page.token!,
   );
 

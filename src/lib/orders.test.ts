@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { aggregateOrders, orderTotals } from "./orders";
+import { aggregateOrders, orderTotals, splitOrderByProduct, sumOrderTotals } from "./orders";
 
 test("ນັບຍອດຂາຍຈິງສະເພາະອໍເດີທີ່ສົ່ງສຳເລັດ", () => {
   const total = aggregateOrders(
@@ -61,4 +61,40 @@ test("ຄ່າເງິນຕິດລົບຈາກ form ບໍ່ສາມ�
   });
   assert.equal(row.netRevenue, 0);
   assert.equal(row.orderMargin, 0);
+});
+
+test("ບິນຫຼາຍສິນຄ້າແບ່ງເງິນຕາມສັດສ່ວນມູນຄ່າ ແລະ ລວມຄືນໄດ້ເທົ່າເດີມ", () => {
+  const order = {
+    status: "DELIVERED" as const,
+    saleAmount: 300_000,
+    productCost: 120_000,
+    shippingCost: 30_000,
+    otherCost: 0,
+    refundAmount: 0,
+  };
+  const parts = splitOrderByProduct(order, [
+    { productId: "shirt", productName: "ເສື້ອ", quantity: 2, unitPrice: 100_000 },
+    { productId: "hat", productName: "ໝວກ", quantity: 1, unitPrice: 100_000 },
+  ])!;
+
+  assert.equal(parts.length, 2);
+  const shirt = parts.find((p) => p.productId === "shirt")!.row;
+  assert.equal(Math.round(shirt.saleAmount), 200_000);
+  assert.equal(Math.round(shirt.shippingCost), 20_000);
+
+  const merged = sumOrderTotals(parts.map((p) => p.row));
+  assert.equal(Math.round(merged.netRevenue), 300_000);
+  assert.equal(Math.round(merged.orderMargin), orderTotals(order).orderMargin);
+});
+
+test("ບິນສິນຄ້າດຽວ ບໍ່ແບ່ງ", () => {
+  const order = { status: "PENDING" as const, saleAmount: 1, productCost: 0, shippingCost: 0, otherCost: 0, refundAmount: 0 };
+  assert.equal(splitOrderByProduct(order, []), null);
+  assert.equal(
+    splitOrderByProduct(order, [
+      { productId: "a", productName: "A", quantity: 1, unitPrice: 5 },
+      { productId: "a", productName: "A", quantity: 2, unitPrice: 5 },
+    ]),
+    null,
+  );
 });

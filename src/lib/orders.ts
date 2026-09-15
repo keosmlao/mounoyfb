@@ -130,3 +130,61 @@ export function groupOrderTotals<T extends OrderFinancialRow>(
   }
   return grouped;
 }
+
+// ------------------------------------------------ ບິນຫຼາຍສິນຄ້າ → ລາຍງານຕາມສິນຄ້າ
+
+export type OrderLine = {
+  productId: string | null;
+  productName: string | null;
+  quantity: number;
+  unitPrice: number;
+};
+
+export type ProductShare<T> = {
+  productId: string | null;
+  productName: string | null;
+  row: T;
+};
+
+/**
+ * ແບ່ງບິນທີ່ມີຫຼາຍສິນຄ້າ (ບິນຈາກ live) ອອກເປັນແຖວຕໍ່ສິນຄ້າ ສຳລັບລາຍງານ "ຕາມສິນຄ້າ".
+ *
+ * ເງິນທຸກຊ່ອງ (ຍອດຂາຍ, ຕົ້ນທຶນ, ຄ່າສົ່ງ, ເງິນຄືນ) ແບ່ງຕາມ**ສັດສ່ວນມູນຄ່າ**ຂອງແຕ່ລະສິນຄ້າ
+ * ໃນບິນ (ລາຄາ × ຈຳນວນ) — ບິນທີ່ມູນຄ່າເປັນ 0 ແບ່ງຕາມຈຳນວນຊິ້ນ. ບິນ 1 ບິນຈຶ່ງຖືກນັບ
+ * ເປັນ "1 Order" ຢູ່ທຸກສິນຄ້າທີ່ມັນມີ — **ຍອດລວມທັງລາຍງານຕ້ອງຄິດຈາກບິນເດີມ ບໍ່ແມ່ນຈາກນີ້**.
+ *
+ * ບິນທີ່ມີສິນຄ້າດຽວ (ຫຼື ບໍ່ມີລາຍການ) ຄືນຕົວເດີມ.
+ */
+export function splitOrderByProduct<T extends OrderFinancialRow>(
+  order: T,
+  lines: readonly OrderLine[],
+): ProductShare<T>[] | null {
+  const groups = new Map<string, { productId: string | null; productName: string | null; value: number; qty: number }>();
+  for (const line of lines) {
+    const key = line.productId ?? "none";
+    const g = groups.get(key) ?? { productId: line.productId, productName: line.productName, value: 0, qty: 0 };
+    g.value += Math.max(0, line.quantity * line.unitPrice);
+    g.qty += Math.max(0, line.quantity);
+    groups.set(key, g);
+  }
+  if (groups.size <= 1) return null;
+
+  const totalValue = [...groups.values()].reduce((s, g) => s + g.value, 0);
+  const totalQty = [...groups.values()].reduce((s, g) => s + g.qty, 0);
+
+  return [...groups.values()].map((g) => {
+    const share = totalValue > 0 ? g.value / totalValue : safeDiv(g.qty, totalQty);
+    return {
+      productId: g.productId,
+      productName: g.productName,
+      row: {
+        ...order,
+        saleAmount: order.saleAmount * share,
+        productCost: order.productCost * share,
+        shippingCost: order.shippingCost * share,
+        otherCost: order.otherCost * share,
+        refundAmount: order.refundAmount * share,
+      },
+    };
+  });
+}

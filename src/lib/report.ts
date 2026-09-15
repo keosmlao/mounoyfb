@@ -10,6 +10,7 @@ import {
 import {
   deriveOrderEconomics,
   groupOrderTotals,
+  splitOrderByProduct,
   sumOrderTotals,
   EMPTY_ORDER_TOTALS,
   type OrderEconomics,
@@ -70,6 +71,7 @@ export async function buildReport(
       where: { date: dateWhere },
       include: {
         product: { select: { name: true } },
+        items: { select: { productId: true, quantity: true, unitPrice: true, product: { select: { name: true } } } },
         campaign: {
           select: {
             id: true,
@@ -88,6 +90,25 @@ export async function buildReport(
 
   type InsightRow = (typeof insights)[number];
   type OrderRow = (typeof orders)[number];
+
+  // ລາຍງານຕາມສິນຄ້າ: ບິນຫຼາຍສິນຄ້າ (ຈາກ live) ແບ່ງເງິນໄປຫາແຕ່ລະສິນຄ້າ —
+  // ມຸມມອງອື່ນໃຊ້ບິນເດີມ ແລະ ຍອດລວມທັງລາຍງານຄິດຈາກບິນເດີມສະເໝີ (ບໍ່ນັບຊ້ຳ)
+  const groupedOrders: OrderRow[] =
+    groupBy === "product"
+      ? orders.flatMap((o) => {
+          const parts = splitOrderByProduct(
+            o,
+            o.items.map((i) => ({ ...i, productName: i.product?.name ?? null })),
+          );
+          return parts
+            ? parts.map((p) => ({
+                ...p.row,
+                productId: p.productId,
+                product: p.productName ? { name: p.productName } : null,
+              }))
+            : [o];
+        })
+      : orders;
 
   const insightKey = (r: InsightRow): string => {
     switch (groupBy) {
@@ -130,7 +151,7 @@ export async function buildReport(
     }
   }
 
-  for (const r of orders) {
+  for (const r of groupedOrders) {
     const key = orderKey(r);
     if (groupBy === "campaign" && r.campaignId) hrefs.set(key, `/campaigns/${r.campaignId}`);
     if (labels.has(key)) continue;
@@ -145,7 +166,7 @@ export async function buildReport(
   }
 
   const insightGroups = groupTotals(insights, insightKey);
-  const orderGroups = groupOrderTotals(orders, orderKey);
+  const orderGroups = groupOrderTotals(groupedOrders, orderKey);
   const keys = new Set([...insightGroups.keys(), ...orderGroups.keys()]);
 
   const rows: ReportRow[] = [...keys].map((key) => {
