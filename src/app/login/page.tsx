@@ -28,15 +28,15 @@ export default async function LoginPage({
           <span className="brand-mark grid h-11 w-11 place-items-center rounded-xl text-lg font-black">F</span>
           <div>
             <p className="font-bold tracking-[0.08em]">FBMONOY</p>
-            <p className="text-2xs tracking-[0.16em] text-blue-200">ADS OPERATIONS</p>
+            <p className="text-2xs tracking-[0.16em] text-pink-100">ADS OPERATIONS</p>
           </div>
         </div>
         <div className="relative z-10 max-w-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-blue-300">From spend to real profit</p>
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-orange-200">From spend to real profit</p>
           <h1 className="mt-5 text-5xl font-bold leading-[1.12] tracking-[-0.055em]">
             ຄຸ້ມຄອງ Ads ດ້ວຍ<br />ຍອດຂາຍຈິງ
           </h1>
-          <p className="mt-5 max-w-lg text-base leading-8 text-slate-300">
+          <p className="mt-5 max-w-lg text-base leading-8 text-white/85">
             ເຊື່ອມຄ່າໂຄສະນາ, ຄົນທັກ, Order, ຕົ້ນທຶນ ແລະກຳໄລໄວ້ໃນບ່ອນດຽວ.
           </p>
           <div className="mt-8 grid max-w-lg grid-cols-3 gap-3 text-sm">
@@ -45,14 +45,14 @@ export default async function LoginPage({
               ["02", "Order profit"],
               ["03", "Action alerts"],
             ].map(([number, label]) => (
-              <div key={number} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
-                <p className="text-xs font-bold text-blue-300">{number}</p>
+              <div key={number} className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur-sm">
+                <p className="text-xs font-bold text-orange-200">{number}</p>
                 <p className="mt-2 font-semibold">{label}</p>
               </div>
             ))}
           </div>
         </div>
-        <p className="relative z-10 text-xs text-slate-500">Built for Lao commerce teams</p>
+        <p className="relative z-10 text-xs text-white/60">Built for Lao commerce teams</p>
       </section>
 
       <section className="grid place-items-center px-5 py-10 sm:px-10">

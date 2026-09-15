@@ -26,6 +26,11 @@ const GROUPS: NavGroup[] = [
       { href: "/orders", label: "ອໍເດີ", icon: "orders" },
       { href: "/leads", label: "ລູກຄ້າ", icon: "leads" },
       { href: "/campaigns", label: "ແຄມເປນ", icon: "campaigns" },
+    ],
+  },
+  {
+    title: "ວິເຄາະ ແລະ ວາງແຜນ",
+    items: [
       { href: "/analysis", label: "ວິເຄາະ", icon: "analysis" },
       { href: "/playbook", label: "ວິທີຍິງ", icon: "playbook" },
       { href: "/behavior", label: "ພຶດຕິກຳລູກຄ້າ", icon: "behavior" },
@@ -59,8 +64,8 @@ const BOTTOM: NavItem[] = [
 
 /** ຈື່ວ່າຜູ້ໃຊ້ຫຍໍ້ເມນູໄວ້ບໍ່ — ເປັນຄວາມສະດວກສ່ວນຕົວຂອງແຕ່ລະເຄື່ອງ */
 const STORE_KEY = "fbmonoy.nav";
-const WIDE = "11rem";
-const NARROW = "3.6rem";
+const WIDE = "15.5rem";
+const NARROW = "4.5rem";
 
 /**
  * ຄ່າ "ກວ້າງ/ແຄບ" ຢູ່ໃນ localStorage ບໍ່ແມ່ນໃນ React —
@@ -106,8 +111,8 @@ function isActive(pathname: string, href: string) {
 /**
  * ການນຳທາງຫຼັກ — ແຖບຂ້າງທີ່ **ຫຍໍ້/ຂະຫຍາຍໄດ້ດ້ວຍປຸ່ມ ☰**.
  *
- * ກວ້າງ (11rem) = ເຫັນຄຳເຕັມ ຫາເມນູໄດ້ໄວ ·
- * ແຄບ (3.6rem) = ຄືນຄວາມກວ້າງໃຫ້ຕາຕະລາງເວລາເບິ່ງລາຍງານ.
+ * ກວ້າງ (15.5rem) = ເຫັນຄຳເຕັມ ຫາເມນູໄດ້ໄວ ·
+ * ແຄບ (4.5rem) = ຄືນຄວາມກວ້າງໃຫ້ຕາຕະລາງເວລາເບິ່ງລາຍງານ.
  * ຄ່າທີ່ເລືອກຖືກຈື່ໄວ້ໃນເຄື່ອງ ຈຶ່ງບໍ່ຕ້ອງກົດຄືນທຸກເທື່ອທີ່ເປີດ.
  *
  * ຄວາມກວ້າງຄຸມດ້ວຍຕົວແປ CSS `--rail` ຢູ່ `<html>` ຈຶ່ງບໍ່ຕ້ອງສົ່ງ state
@@ -164,7 +169,11 @@ export function SideNav({
           </button>
           {wide ? (
             <Link href="/" className="rail-brand-name">
-              FBMONOY
+              <span className="brand-mark h-9 w-9 text-sm" aria-hidden>F</span>
+              <span className="min-w-0">
+                <span className="block">FBMONOY</span>
+                <span className="rail-brand-caption">ຈັດການໂຄສະນາ ແລະ ການຂາຍ</span>
+              </span>
             </Link>
           ) : null}
         </div>
@@ -227,7 +236,8 @@ export function SideNav({
         >
           <NavIcon name="menu" />
         </button>
-        <Link href="/" className="brand-name text-sm">
+        <Link href="/" className="brand-name flex items-center gap-2 text-sm">
+          <span className="brand-mark h-7 w-7 text-xs" aria-hidden>F</span>
           FBMONOY
         </Link>
         <Link href="/orders" className="btn btn-primary btn-sm ml-auto">
@@ -244,7 +254,7 @@ export function SideNav({
             className="absolute inset-0 bg-slate-950/40"
             onClick={() => setSheet(false)}
           />
-          <div className="nav-sheet absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-xl border-t border-[var(--border-strong)] bg-[var(--surface)] p-2">
+          <div className="nav-sheet absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-lg)]">
             <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--border-strong)]" />
             {GROUPS.map((group) => (
               <div key={group.title} className="mb-1.5">
@@ -257,7 +267,7 @@ export function SideNav({
                       key={item.href}
                       href={item.href}
                       onClick={() => setSheet(false)}
-                      className={`nav-menu-item ${active ? "bg-[var(--brand-soft)] font-semibold text-[var(--brand)]" : ""}`}
+                      className={`nav-menu-item ${active ? "nav-menu-item-active" : ""}`}
                     >
                       <NavIcon name={item.icon} className="nav-svg" />
                       {item.label}

@@ -27,9 +27,9 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="card-header flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-1.5">
+    <div className="card-header flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
       <div className="min-w-0">
-        <h2 className="text-base font-semibold leading-tight">{title}</h2>
+        <h2 className="text-base font-semibold leading-relaxed">{title}</h2>
         {subtitle ? (
           <p className="text-2xs text-[var(--fg-muted)]">
             {subtitle}
@@ -51,11 +51,11 @@ export function PageHeader({
   action?: ReactNode;
 }) {
   return (
-    <div className="page-header mb-2.5 flex flex-wrap items-center justify-between gap-2">
+    <div className="page-header mb-5 flex flex-wrap items-center justify-between gap-2">
       <div className="min-w-0">
         <h1 className="text-lg font-bold tracking-[-0.02em] sm:text-xl">{title}</h1>
         {description ? (
-          <p className="max-w-4xl text-xs text-[var(--fg-muted)]">
+          <p className="mt-1 max-w-4xl text-xs text-[var(--fg-muted)]">
             {description}
           </p>
         ) : null}

@@ -41,6 +41,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **ໄອຄອນເມນູເປັນ SVG ຢູ່ `src/components/nav-icons.tsx`** — ຫ້າມກັບໄປໃຊ້
   ຕົວອັກສອນສັນຍາລັກ (▧ ▣ ▤) ອີກ ເພາະຮູບຮ່າງຄ້າຍກັນຈົນແຍກບໍ່ອອກ ແລະ ນ້ຳໜັກ
   ເສັ້ນຂຶ້ນກັບຟອນຂອງເຄື່ອງ. ເພີ່ມເມນູໃໝ່ = ເພີ່ມໄອຄອນໃສ່ `IconName` ນຳ.
+- **ສີແບຣນເປັນ gradient ບົວ→ສົ້ມ (`--brand-grad`) ສະໄຕ social commerce** — ປາຍທັງສອງ
+  ຕ້ອງເຂັ້ມພໍໃຫ້ຕົວໜັງສືຂາວຜ່ານ WCAG AA (≥4.5:1) ສະເໝີ; ສີສົດ (`--brand-grad-vivid`)
+  ໃຊ້ແຕ່ຕົກແຕ່ງທີ່ບໍ່ມີຕົວໜັງສືຢູ່ເທິງ. ປຸ່ມ/ເມນູ/badge ເປັນຮູບເມັດມົນ (`--radius-pill`).
 - **ສີກຣາຟໃນ `globals.css` (`--chart-1..5`) ຜ່ານການກວດ CVD/contrast ແລ້ວ** —
   ຖ້າຈະປ່ຽນ ຕ້ອງກວດຄືນ ແລະ ຫ້າມສັບປ່ຽນລຳດັບ.
 - **ຂະໜາດຕົວອັກສອນມີບັນໄດດຽວຢູ່ `@theme` ໃນ `globals.css`** — ໃຊ້ utility

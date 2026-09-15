@@ -54,7 +54,7 @@ export default async function AppLayout({
         userName={me?.displayName ?? null}
       />
       {/* ບໍ່ຈຳກັດຄວາມກວ້າງ — ຈໍກວ້າງເທົ່າໃດ ກໍ່ໃຫ້ຕາຕະລາງໃຊ້ໄດ້ໝົດ */}
-      <main className="app-main min-w-0 px-2 pt-3 sm:px-3 lg:px-3 lg:pb-5 lg:pt-3">
+      <main className="app-main min-w-0 px-4 pt-4 sm:px-6 lg:px-7 lg:pb-7 lg:pt-6">
         {children}
       </main>
     </div>

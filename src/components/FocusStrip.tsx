@@ -40,7 +40,7 @@ function FocusCard({
   return (
     <Link
       href={href}
-      className="card flex flex-col justify-between gap-1 px-3 py-2.5 transition-colors hover:bg-[var(--surface-2)]"
+      className="card focus-card flex flex-col justify-between gap-2 px-4 py-4 transition-colors hover:bg-[var(--surface-2)]"
     >
       <p className="text-2xs font-semibold uppercase tracking-wide text-[var(--fg-subtle)]">
         {label}
@@ -66,7 +66,7 @@ export function FocusStrip({
   const { queue, campaigns, billing } = focus;
 
   return (
-    <div className="mb-3 grid grid-cols-2 gap-2 lg:grid-cols-4">
+    <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
       <FocusCard
         href="/queue"
         label="ຄົນລໍຄຳຕອບ"
