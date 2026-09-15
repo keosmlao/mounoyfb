@@ -46,7 +46,7 @@ function claim(c: AnalysisComment, itemId: string | null, extra: Partial<Analysi
 }
 
 function base(): LiveAnalysisInput {
-  return { comments: [], claims: [], items: [], orders: [], past: [], autoAck: false };
+  return { comments: [], claims: [], items: [], orders: [], past: [], autoAck: false, stats: [], boosts: [] };
 }
 
 test("ຂອງໝົດຕອນໃດ ແລະ ຍອດທີ່ພາດ", () => {
@@ -147,7 +147,7 @@ test("ບິນ: ຍັງບໍ່ແຈ້ງ ແລະ ຍົກເລີກ�
     ...Array.from({ length: 7 }, () => ({ ...row, status: "DELIVERED" as const, notifiedAt: at(1) })),
     ...Array.from({ length: 3 }, () => ({ ...row, status: "CANCELLED" as const, notifiedAt: null })),
   ];
-  input.past = [1, 2, 3].map(() => ({ reservedValue: 10_000, cfCustomers: 10 }));
+  input.past = [1, 2, 3].map(() => ({ reservedValue: 10_000, cfCustomers: 10, viewers: null }));
 
   const a = analyzeLive(input);
   assert.deepEqual(a.funnel, { billed: 10, notified: 7, confirmed: 7, delivered: 7, cancelled: 3 });
@@ -157,4 +157,42 @@ test("ບິນ: ຍັງບໍ່ແຈ້ງ ແລະ ຍົກເລີກ�
   assert.ok(ids.includes("live-notify"));
   assert.ok(ids.includes("live-cancel"));
   assert.ok(ids.includes("live-vs-past"));
+});
+
+test("ຄົນເບິ່ງ: ຈຸດຫຼ້າສຸດ, ອັດຕາສ່ວນຮ່ວມ, ເວລາເບິ່ງ", () => {
+  const input = base();
+  input.items = [{ id: "a", code: "A1", name: "ເສື້ອ", price: 1000, stock: null }];
+  const cs = Array.from({ length: 6 }, (_, i) => comment(i, { isCf: i < 2 }));
+  input.comments = cs;
+  input.claims = cs.slice(0, 2).map((c) => claim(c, "a"));
+  input.stats = [
+    { at: at(5), views: 300, viewers: 250, avgWatchMs: 40_000, reactions: 10 },
+    { at: at(30), views: 900, viewers: 600, avgWatchMs: null, reactions: 40 },
+  ];
+
+  const a = analyzeLive(input);
+  assert.equal(a.audience.viewers, 600);
+  assert.equal(a.audience.avgWatchSeconds, 40, "ຈຸດຫຼ້າສຸດບໍ່ມີຄ່າ ໃຫ້ຖອຍໄປເອົາຈຸດກ່ອນ");
+  assert.equal(a.audience.engagementRate, 6 / 600);
+  assert.equal(a.audience.cfRate, 2 / 600);
+  assert.deepEqual(a.audience.timeline.map((t) => t.viewers), [250, 600]);
+  const ids = adviseLive(a, money, false).map((x) => x.id);
+  assert.ok(ids.includes("live-engagement"));
+  assert.ok(ids.includes("live-watchtime"));
+});
+
+test("boost: ຄ່າໂຄສະນາເປັນກີບ ແລະ ຄຸ້ມບໍ່", () => {
+  const input = base();
+  input.items = [{ id: "a", code: "A1", name: "ເສື້ອ", price: 100_000, stock: null }];
+  const cs = Array.from({ length: 4 }, (_, i) => comment(i, { isCf: true }));
+  input.comments = cs;
+  input.claims = cs.map((c) => claim(c, "a"));
+  // ງົບ $20 = 434,000 ກີບ · ໃຊ້ໄປ $10 → 217,000 ກີບ · ຍອດຈອງ 400,000
+  input.boosts = [{ spend: 10, budget: 20, budgetLak: 434_000, reach: 5000 }];
+
+  const a = analyzeLive(input);
+  assert.equal(a.boost?.spendLak, 217_000);
+  assert.equal(a.boost?.costPerCfCustomer, 217_000 / 4);
+  assert.ok(adviseLive(a, money, false).some((x) => x.id === "live-boost-poor"));
+  assert.equal(analyzeLive(base()).boost, null, "ບໍ່ໄດ້ boost = ບໍ່ມີກ່ອງ boost");
 });

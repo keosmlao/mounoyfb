@@ -6,8 +6,11 @@ import { AdviceList } from "@/components/AdviceList";
 import { BarList } from "@/components/charts/BarList";
 import { TrendChart } from "@/components/charts/TrendChart";
 import { loadLiveAnalysis } from "@/lib/live-server";
+import { pullLiveStats } from "@/lib/live-stats-server";
+import { ActionMessageForm } from "@/components/ActionMessageForm";
+import { refreshLiveStatsAction } from "../../actions";
 import { adviseLive, analyzeLive } from "@/lib/live-analysis";
-import { formatDateLao } from "@/lib/date";
+import { formatDateLao, formatTimeLao } from "@/lib/date";
 import { formatInt, formatPercent } from "@/lib/format";
 import { loadMoney } from "@/lib/money-server";
 
@@ -19,6 +22,8 @@ export const dynamic = "force-dynamic";
  */
 export default async function LiveReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // ຍອດຄົນເບິ່ງອັບເດດເອງຕອນເປີດໜ້າ (ມີເພດານ 5 ນາທີຢູ່ໃນຕົວ) — ລົ້ມກໍ່ຍັງເປີດໜ້າໄດ້
+  await pullLiveStats(id).catch(() => null);
   const [{ money, currency, rate }, loaded] = await Promise.all([loadMoney(), loadLiveAnalysis(id)]);
   if (!loaded) notFound();
 
@@ -27,7 +32,9 @@ export default async function LiveReportPage({ params }: { params: Promise<{ id:
   const advice = adviseLive(a, money, session.autoAck);
   const hasData = a.comments > 0 || a.reservedQty > 0;
 
+  const au = a.audience;
   const funnel = [
+    ...(au.viewers !== null ? [{ key: "viewers", label: "ຄົນເບິ່ງ (Facebook)", value: au.viewers }] : []),
     { key: "commenters", label: "ຄົນ comment", value: a.commenters },
     { key: "cf", label: "ຄົນ CF", value: a.cfCustomers },
     { key: "billed", label: "ອອກບິນ", value: a.funnel.billed },
@@ -40,7 +47,7 @@ export default async function LiveReportPage({ params }: { params: Promise<{ id:
     <>
       <PageHeader
         title={`ວິເຄາະ: ${session.title}`}
-        description={`${session.page.name} · ${formatDateLao(session.date)} · ຄິດຈາກ comment, CF ແລະ ບິນຂອງລະບົບ (ບໍ່ລວມຍອດຄົນເບິ່ງຂອງ Facebook)`}
+        description={`${session.page.name} · ${formatDateLao(session.date)} · ຄົນເບິ່ງມາຈາກ Facebook · comment, CF ແລະ ບິນມາຈາກລະບົບ`}
         action={<Link href={`/live/${session.id}`} className="btn">← ກະດານ live</Link>}
       />
 
@@ -77,6 +84,110 @@ export default async function LiveReportPage({ params }: { params: Promise<{ id:
               }
             />
           </StatStrip>
+
+          <Card className="mb-3">
+            <CardHeader
+              title="ຄົນເບິ່ງ"
+              subtitle={
+                au.checkedAt
+                  ? `ຈາກ Facebook · ອັບເດດ ${formatTimeLao(au.checkedAt)} · Facebook ຄິດຍອດຊ້າກວ່າຄວາມຈິງ ຍອດຈະເພີ່ມອີກຫຼາຍຊົ່ວໂມງຫຼັງ live`
+                  : "ຍັງບໍ່ມີຂໍ້ມູນຈາກ Facebook — ລະບົບດຶງທຸກ 5 ນາທີລະຫວ່າງ live"
+              }
+              action={
+                <ActionMessageForm
+                  action={refreshLiveStatsAction.bind(null, session.id)}
+                  submitLabel="↻ ອັບເດດຍອດເບິ່ງ"
+                  pendingText="..."
+                  buttonClassName="btn btn-sm"
+                />
+              }
+            />
+            {au.viewers === null ? (
+              <p className="px-4 py-3 text-xs text-[var(--fg-muted)]">
+                ບໍ່ມີຍອດຄົນເບິ່ງ — ຕ້ອງຜູກວິດີໂອ live ແລະ token ຂອງເພຈຕ້ອງມີສິດ read_insights.
+                ຍອດ “ຄົນເບິ່ງພ້ອມກັນ” ດຶງບໍ່ໄດ້ ເພາະ Facebook ກັນ Live Video API ໄວ້.
+              </p>
+            ) : (
+              <>
+                <dl className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 xl:grid-cols-6">
+                  <div>
+                    <dt className="text-2xs text-[var(--fg-subtle)]">ຄົນເບິ່ງ (ບໍ່ນັບຊ້ຳ)</dt>
+                    <dd className="tnum text-lg font-semibold">{formatInt(au.viewers)}</dd>
+                    {au.vsPast !== null ? (
+                      <dd className={`text-2xs ${au.vsPast >= 1 ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
+                        {au.vsPast >= 1 ? "▲" : "▼"} {formatPercent(Math.abs(au.vsPast - 1), 0)} ທຽບ live ກ່ອນໆ
+                      </dd>
+                    ) : null}
+                  </div>
+                  <div>
+                    <dt className="text-2xs text-[var(--fg-subtle)]">ຍອດເບິ່ງ (ເທື່ອ)</dt>
+                    <dd className="tnum text-lg font-semibold">{formatInt(au.views)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs text-[var(--fg-subtle)]">ເບິ່ງສະເລ່ຍ</dt>
+                    <dd className="tnum text-lg font-semibold">
+                      {au.avgWatchSeconds === null
+                        ? "—"
+                        : au.avgWatchSeconds >= 60
+                          ? `${Math.floor(au.avgWatchSeconds / 60)} ນາທີ ${Math.round(au.avgWatchSeconds % 60)} ວິ`
+                          : `${Math.round(au.avgWatchSeconds)} ວິ`}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs text-[var(--fg-subtle)]">ຄົນເບິ່ງ → comment</dt>
+                    <dd className="tnum text-lg font-semibold">{au.engagementRate === null ? "—" : formatPercent(au.engagementRate, 1)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs text-[var(--fg-subtle)]">ຄົນເບິ່ງ → CF</dt>
+                    <dd className="tnum text-lg font-semibold">{au.cfRate === null ? "—" : formatPercent(au.cfRate, 1)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-2xs text-[var(--fg-subtle)]">ຍອດຈອງຕໍ່ຄົນເບິ່ງ</dt>
+                    <dd className="tnum text-lg font-semibold">{au.valuePerViewer === null ? "—" : money(au.valuePerViewer)}</dd>
+                  </div>
+                </dl>
+                {au.timeline.length >= 2 ? (
+                  <div className="border-t border-[var(--border)] p-3">
+                    <TrendChart
+                      labels={au.timeline.map((t) => formatTimeLao(t.at))}
+                      series={[{ name: "ຄົນເບິ່ງສະສົມ", color: "var(--chart-2)", values: au.timeline.map((t) => t.viewers) }]}
+                      valueFormat="int"
+                      currency={currency}
+                      fxRate={rate}
+                    />
+                  </div>
+                ) : null}
+              </>
+            )}
+          </Card>
+
+          {a.boost ? (
+            <Card className="mb-3">
+              <CardHeader title="ຜົນຂອງ boost" subtitle="ຄ່າໂຄສະນາແປງເປັນກີບດ້ວຍອັດຕາຕອນສ້າງ boost · ກົດ “ອັບເດດ” ຢູ່ກະດານ live ເພື່ອດຶງຍອດໃຊ້ຈ່າຍຫຼ້າສຸດ" />
+              <dl className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-5">
+                <div>
+                  <dt className="text-2xs text-[var(--fg-subtle)]">ຄ່າ boost</dt>
+                  <dd className="tnum text-lg font-semibold">{money(a.boost.spendLak)}</dd>
+                </div>
+                <div>
+                  <dt className="text-2xs text-[var(--fg-subtle)]">ເຂົ້າເຖິງ</dt>
+                  <dd className="tnum text-lg font-semibold">{formatInt(a.boost.reach)} ຄົນ</dd>
+                </div>
+                <div>
+                  <dt className="text-2xs text-[var(--fg-subtle)]">ຍອດຈອງ ÷ ຄ່າ boost</dt>
+                  <dd className="tnum text-lg font-semibold">{a.boost.bookedRoas === null ? "—" : `${a.boost.bookedRoas.toFixed(1)}×`}</dd>
+                </div>
+                <div>
+                  <dt className="text-2xs text-[var(--fg-subtle)]">ຂາຍຈິງ ÷ ຄ່າ boost</dt>
+                  <dd className="tnum text-lg font-semibold">{a.boost.actualRoas === null ? "—" : `${a.boost.actualRoas.toFixed(1)}×`}</dd>
+                </div>
+                <div>
+                  <dt className="text-2xs text-[var(--fg-subtle)]">ຕົ້ນທຶນຕໍ່ຄົນ CF</dt>
+                  <dd className="tnum text-lg font-semibold">{a.boost.costPerCfCustomer === null ? "—" : money(a.boost.costPerCfCustomer)}</dd>
+                </div>
+              </dl>
+            </Card>
+          ) : null}
 
           <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
             <div className="grid gap-3">

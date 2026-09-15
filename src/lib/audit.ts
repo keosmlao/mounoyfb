@@ -25,6 +25,9 @@ export type AuditAction =
   | "fbpage.delete"
   | "live.delete"
   | "live.notify"
+  | "live.boost"
+  | "live.boost.status"
+  | "live.boost.cap"
   | "settings.token"
   | "settings.user";
 
@@ -64,6 +67,9 @@ export const AUDIT_LABEL: Record<string, string> = {
   "fbpage.delete": "ລຶບເພຈ",
   "live.delete": "ລຶບຮອບ live",
   "live.notify": "ສົ່ງສະຫຼຸບຍອດ live ຫາລູກຄ້າ",
+  "live.boost": "ສ້າງ boost live (ຢຸດໄວ້)",
+  "live.boost.status": "ຍິງ / ຢຸດ boost live",
+  "live.boost.cap": "ປ່ຽນເພດານງົບ boost",
   "settings.token": "ປ່ຽນ token / ຄ່າເຊື່ອມຕໍ່",
   "settings.user": "ຈັດການຜູ້ໃຊ້",
 };

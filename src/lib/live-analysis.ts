@@ -43,7 +43,19 @@ export type AnalysisItem = AllocItem & {
 export type AnalysisOrder = OrderFinancialRow & { notifiedAt: Date | null };
 
 /** ຍອດຂອງ live ກ່ອນໆ — ໃຊ້ປຽບທຽບວ່າຮອບນີ້ດີ ຫຼື ແຍ່ກວ່າປົກກະຕິ */
-export type PastLive = { reservedValue: number; cfCustomers: number };
+export type PastLive = { reservedValue: number; cfCustomers: number; viewers: number | null };
+
+/** ຈຸດຍອດຄົນເບິ່ງຈາກ Facebook — ຄ່າສະສົມນັບແຕ່ເລີ່ມ live */
+export type AnalysisStat = {
+  at: Date;
+  views: number | null;
+  viewers: number | null;
+  avgWatchMs: number | null;
+  reactions: number | null;
+};
+
+/** ການ boost — spend ເປັນສະກຸນຂອງບັນຊີ ແປງເປັນກີບດ້ວຍອັດຕາຕອນສ້າງ (budgetLak/budget) */
+export type AnalysisBoost = { spend: number | null; budget: number; budgetLak: number; reach: number | null };
 
 export type LiveAnalysisInput = {
   comments: readonly AnalysisComment[];
@@ -52,6 +64,8 @@ export type LiveAnalysisInput = {
   orders: readonly AnalysisOrder[];
   past: readonly PastLive[];
   autoAck: boolean;
+  stats: readonly AnalysisStat[];
+  boosts: readonly AnalysisBoost[];
 };
 
 // ------------------------------------------------------------------ ຜົນ
@@ -112,6 +126,32 @@ export type LiveAnalysis = {
   money: OrderTotals;
   /** ຍອດຈອງຂອງຮອບນີ້ ທຽບຄ່າສະເລ່ຍຂອງ live ກ່ອນໆ (1.2 = ດີກວ່າ 20%) */
   vsPast: number | null;
+  audience: {
+    /** ຄົນເບິ່ງ (ບໍ່ນັບຊ້ຳ) — null = Facebook ຍັງບໍ່ໃຫ້ຂໍ້ມູນ */
+    viewers: number | null;
+    views: number | null;
+    avgWatchSeconds: number | null;
+    reactions: number | null;
+    /** ຄົນ comment / ຄົນເບິ່ງ */
+    engagementRate: number | null;
+    /** ຄົນ CF / ຄົນເບິ່ງ */
+    cfRate: number | null;
+    /** ຍອດຈອງ / ຄົນເບິ່ງ (ກີບ) */
+    valuePerViewer: number | null;
+    /** ຄົນເບິ່ງສະສົມຕາມເວລາ */
+    timeline: { at: Date; viewers: number }[];
+    checkedAt: Date | null;
+    vsPast: number | null;
+  };
+  boost: {
+    spendLak: number;
+    reach: number;
+    /** ຍອດຈອງ / ຄ່າໂຄສະນາ */
+    bookedRoas: number | null;
+    /** ຍອດຂາຍຈິງ (ຮັບສຳເລັດ) / ຄ່າໂຄສະນາ */
+    actualRoas: number | null;
+    costPerCfCustomer: number | null;
+  } | null;
 };
 
 // ------------------------------------------------------------------ ເກນ
@@ -126,6 +166,10 @@ export const MIN_QUESTIONS = 5;
 export const MIN_BILLS = 10;
 /** live ກ່ອນໆຂັ້ນຕ່ຳກ່ອນປຽບທຽບ */
 export const MIN_PAST = 3;
+/** ຄົນເບິ່ງຂັ້ນຕ່ຳກ່ອນເວົ້າເລື່ອງອັດຕາສ່ວນຮ່ວມ/ເວລາເບິ່ງ */
+export const MIN_VIEWERS = 200;
+/** ຄ່າ boost ຂັ້ນຕ່ຳ (ກີບ) ກ່ອນຕັດສິນວ່າຄຸ້ມບໍ່ — ໜ້ອຍກວ່ານີ້ຍັງເປັນຄວາມບັງເອີນ */
+export const MIN_BOOST_SPEND_LAK = 100_000;
 
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -263,6 +307,21 @@ export function analyzeLive(input: LiveAnalysisInput): LiveAnalysis {
     ? input.past.reduce((s, p) => s + p.reservedValue, 0) / input.past.length
     : 0;
 
+  // ---- ຄົນເບິ່ງ (Facebook) — ເອົາຈຸດຫຼ້າສຸດທີ່ມີຄ່າ
+  const stats = [...input.stats].sort((a, b) => a.at.getTime() - b.at.getTime());
+  const latest = <K extends keyof AnalysisStat>(key: K) =>
+    [...stats].reverse().find((s) => s[key] !== null)?.[key] ?? null;
+  const viewers = latest("viewers") as number | null;
+  const avgWatchMs = latest("avgWatchMs") as number | null;
+  const pastViewers = input.past.map((p) => p.viewers).filter((v): v is number => v !== null && v > 0);
+  const money = sumOrderTotals(input.orders);
+
+  // ---- boost
+  const spendLak = input.boosts.reduce(
+    (sum, b) => sum + (b.spend && b.budget > 0 ? (b.spend / b.budget) * b.budgetLak : 0),
+    0,
+  );
+
   return {
     minutes,
     comments: customerComments.length,
@@ -288,8 +347,34 @@ export function analyzeLive(input: LiveAnalysisInput): LiveAnalysis {
     peak,
     lateCfShare,
     funnel,
-    money: sumOrderTotals(input.orders),
+    money,
     vsPast: input.past.length >= MIN_PAST && pastAvg > 0 ? reservedValue / pastAvg : null,
+    audience: {
+      viewers,
+      views: latest("views") as number | null,
+      avgWatchSeconds: avgWatchMs === null ? null : avgWatchMs / 1000,
+      reactions: latest("reactions") as number | null,
+      engagementRate: viewers ? commenters.size / viewers : null,
+      cfRate: viewers ? cfCustomers.size / viewers : null,
+      valuePerViewer: viewers ? reservedValue / viewers : null,
+      timeline: stats
+        .filter((s) => s.viewers !== null)
+        .map((s) => ({ at: s.at, viewers: s.viewers! })),
+      checkedAt: stats.at(-1)?.at ?? null,
+      vsPast:
+        viewers && pastViewers.length >= MIN_PAST
+          ? viewers / (pastViewers.reduce((a, b) => a + b, 0) / pastViewers.length)
+          : null,
+    },
+    boost: input.boosts.length
+      ? {
+          spendLak,
+          reach: input.boosts.reduce((sum, b) => sum + (b.reach ?? 0), 0),
+          bookedRoas: spendLak > 0 ? reservedValue / spendLak : null,
+          actualRoas: spendLak > 0 ? money.netRevenue / spendLak : null,
+          costPerCfCustomer: spendLak > 0 && cfCustomers.size > 0 ? spendLak / cfCustomers.size : null,
+        }
+      : null,
   };
 }
 
@@ -452,6 +537,57 @@ export function adviseLive(a: LiveAnalysis, money: MoneyFn, autoAck: boolean): A
       confidence: "medium",
       sample: "live ກ່ອນໜ້າ",
     });
+  }
+
+  // ຄົນເບິ່ງຫຼາຍ ແຕ່ບໍ່ມີສ່ວນຮ່ວມ
+  const au = a.audience;
+  if (au.viewers !== null && au.viewers >= MIN_VIEWERS && au.engagementRate !== null && au.engagementRate < 0.03) {
+    out.push({
+      id: "live-engagement",
+      kind: "shift",
+      title: "ຄົນເບິ່ງຫຼາຍ ແຕ່ comment ໜ້ອຍ — ຊວນໃຫ້ comment ຕະຫຼອດ live",
+      reason: `ຄົນເບິ່ງ ${au.viewers.toLocaleString("en-US")} ຄົນ ແຕ່ comment ພຽງ ${a.commenters} ຄົນ (${pct(au.engagementRate)})`,
+      impact: "ຖາມຄຳຖາມງ່າຍໆໃຫ້ຕອບ, ແຈກລາງວັນໃຫ້ຄົນ comment, ບອກວ່າ CF ກ່ອນໄດ້ກ່ອນ",
+      confidence: confidenceFrom(au.viewers, MIN_VIEWERS),
+      sample: `${au.viewers.toLocaleString("en-US")} ຄົນເບິ່ງ`,
+    });
+  }
+  if (au.viewers !== null && au.viewers >= MIN_VIEWERS && au.avgWatchSeconds !== null && au.avgWatchSeconds < 60) {
+    out.push({
+      id: "live-watchtime",
+      kind: "watch",
+      title: `ຄົນເບິ່ງສະເລ່ຍພຽງ ${Math.round(au.avgWatchSeconds)} ວິນາທີ — ຕ້ອງດຶງໃຫ້ຢູ່ຕັ້ງແຕ່ນາທີທຳອິດ`,
+      reason: "ຄົນສ່ວນຫຼາຍເລື່ອນຜ່ານກ່ອນເຫັນສິນຄ້າ",
+      impact: "ເປີດ live ດ້ວຍສິນຄ້າເດັ່ນ/ລາຄາພິເສດ ແລະ ບອກລະຫັດ CF ທັນທີ ບໍ່ຕ້ອງລໍຄົນເຂົ້າ",
+      confidence: confidenceFrom(au.viewers, MIN_VIEWERS),
+      sample: `${au.viewers.toLocaleString("en-US")} ຄົນເບິ່ງ`,
+    });
+  }
+
+  // boost ຄຸ້ມບໍ່ — ວັດຈາກຍອດຈອງ (ຍອດຂາຍຈິງມາຊ້າຫຼາຍມື້)
+  if (a.boost && a.boost.spendLak >= MIN_BOOST_SPEND_LAK && a.boost.bookedRoas !== null) {
+    const roas = a.boost.bookedRoas;
+    if (roas < 3) {
+      out.push({
+        id: "live-boost-poor",
+        kind: "cut",
+        title: `boost ບໍ່ຄຸ້ມ — ຍອດຈອງໄດ້ພຽງ ${roas.toFixed(1)} ເທົ່າຂອງຄ່າໂຄສະນາ`,
+        reason: `ຄ່າ boost ${money(a.boost.spendLak)} · ຍອດຈອງ ${money(a.reservedValue)}`,
+        impact: "ຮອບໜ້າຫຼຸດງົບ, ບີບອາຍຸ/ເພດໃຫ້ຕົງລູກຄ້າ ຫຼື boost ສະເພາະຊ່ວງທີ່ມີສິນຄ້າເດັ່ນ",
+        confidence: confidenceFrom(a.boost.spendLak, MIN_BOOST_SPEND_LAK),
+        sample: `ຄ່າ boost ${money(a.boost.spendLak)}`,
+      });
+    } else if (roas >= 6) {
+      out.push({
+        id: "live-boost-good",
+        kind: "scale",
+        title: `boost ຄຸ້ມ — ຍອດຈອງ ${roas.toFixed(1)} ເທົ່າຂອງຄ່າໂຄສະນາ`,
+        reason: `ຄ່າ boost ${money(a.boost.spendLak)} · ຍອດຈອງ ${money(a.reservedValue)}`,
+        impact: "ຮອບໜ້າລອງເພີ່ມງົບ 20–30% ດ້ວຍກຸ່ມເປົ້າໝາຍເກົ່າ ແລ້ວທຽບຜົນ",
+        confidence: confidenceFrom(a.boost.spendLak, MIN_BOOST_SPEND_LAK),
+        sample: `ຄ່າ boost ${money(a.boost.spendLak)}`,
+      });
+    }
   }
 
   const order: Advice["kind"][] = ["cut", "scale", "shift", "watch", "wait", "info"];

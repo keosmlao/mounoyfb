@@ -1027,6 +1027,8 @@ export async function loadLiveAnalysis(sessionId: string) {
           notifiedAt: true,
         },
       },
+      stats: { orderBy: { at: "asc" } },
+      boosts: { select: { spend: true, budget: true, budgetLak: true, reach: true } },
     },
   });
   if (!session) return null;
@@ -1043,6 +1045,7 @@ export async function loadLiveAnalysis(sessionId: string) {
     include: {
       items: { select: { id: true, stock: true, price: true } },
       claims: true,
+      stats: { orderBy: { at: "desc" }, take: 1, select: { viewers: true } },
     },
   });
 
@@ -1062,8 +1065,11 @@ export async function loadLiveAnalysis(sessionId: string) {
         .map((p) => ({
           reservedValue: reservedValueOf(p.items, toAlloc(p.claims)),
           cfCustomers: new Set(p.claims.map((c) => customerKey(c.fromId, c.fromName))).size,
+          viewers: p.stats[0]?.viewers ?? null,
         })),
       autoAck: session.autoAck,
+      stats: session.stats,
+      boosts: session.boosts,
     },
   };
 }

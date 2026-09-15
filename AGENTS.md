@@ -125,4 +125,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   ກ່ອນຮ້ອງ Facebook** ເພາະຮອບດຶງຊ້ອນກັນໄດ້ (ຫຼາຍແທັບ + ຕົວຕັ້ງເວລາ) — ລົ້ມແລ້ວບໍ່ລອງຊ້ຳ.
   `/{page}/live_videos` ຖືກ Facebook ກັນ (code 10 live-video-api) ຈຶ່ງມີທາງສຳຮອງ `/{page}/videos`.
   ວິເຄາະ live ຢູ່ `live-analysis.ts` (ບໍລິສຸດ · ມີເກນຂໍ້ມູນຂັ້ນຕ່ຳທຸກຄຳແນະນຳ).
+- **Boost live ໃຊ້ເງິນຈິງ** (`live-boost-server.ts`) — ສ້າງ campaign/adset/ad
+  ເປັນ **PAUSED ສະເໝີ** ຄົນກົດຍິງເອງ · ງົບຕ້ອງຜ່ານ `validateBoost()` ທຽບເພດານ
+  **ກີບ** ທີ່ ADMIN ຕັ້ງ (`AppSetting.liveBoostMaxLak` — ບໍ່ມີ = boost ບໍ່ໄດ້) ·
+  ການ*ສ້າງ*ໃຊ້ `createOnce()` **ບໍ່ລອງໃໝ່** (ລອງໃໝ່ = ແຄມເປນຊ້ຳ) ສ່ວນຍິງ/ຢຸດ
+  ຜ່ານ `graphFetch()` ໄດ້ · ສ້າງກາງທາງລົ້ມຕ້ອງລຶບແຄມເປນທີ່ສ້າງແລ້ວຖິ້ມ.
+- **ຍອດຄົນເບິ່ງ live** ມາຈາກ `/{video}/video_insights` (page token + `read_insights`)
+  ເກັບເປັນຈຸດສະສົມໃນ `LiveStat` — **ບໍ່ມີຄົນເບິ່ງພ້ອມກັນ** (ຢູ່ Live Video API ທີ່ຖືກກັນ).
 - **ຢ່າ deploy ອອກອິນເຕີເນັດແບບ http** — ຕັ້ງ `COOKIE_SECURE=1` ພ້ອມ HTTPS ກ່ອນ.

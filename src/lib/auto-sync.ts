@@ -334,6 +334,9 @@ async function tickLive(): Promise<void> {
   try {
     const { pullActiveLives } = await import("./live-server");
     await pullActiveLives();
+    // ຍອດຄົນເບິ່ງ — ມີເພດານຄວາມຖີ່ຢູ່ໃນຕົວມັນເອງ (5 ນາທີ / 6 ຊົ່ວໂມງຫຼັງຈົບ)
+    const { pullRecentLiveStats } = await import("./live-stats-server");
+    await pullRecentLiveStats();
   } catch (error) {
     console.error("[live]", error);
   } finally {

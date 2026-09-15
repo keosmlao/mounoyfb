@@ -3,9 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { requireSession } from "@/lib/auth-server";
+import { currentUser, requireAdmin, requireSession } from "@/lib/auth-server";
 import { recordAudit } from "@/lib/audit";
 import { bool, int0, num, reqDate, reqStr, str } from "@/lib/form";
+import {
+  BOOST_CAP_KEY,
+  createLiveBoost,
+  refreshLiveBoost,
+  setLiveBoostRunning,
+} from "@/lib/live-boost-server";
+import { pullLiveStats } from "@/lib/live-stats-server";
 import { formatInt } from "@/lib/format";
 import { explainFbError } from "@/lib/fb";
 import { extractVideoId, normalizeCode } from "@/lib/live-cf";
@@ -341,4 +348,83 @@ export async function saveLiveAutomation(sessionId: string, fd: FormData) {
     data: { autoAck: bool(fd, "autoAck"), autoHide: bool(fd, "autoHide") },
   });
   revalidateLive(sessionId);
+}
+
+// ------------------------------------------------------------------ boost live
+
+/** ເພດານງົບຕໍ່ການ boost 1 ເທື່ອ (ກີບ) — ສະເພາະ ADMIN ເພາະເປັນເພດານຂອງເງິນຈິງ */
+export async function saveBoostCap(sessionId: string, fd: FormData) {
+  await requireAdmin();
+  const value = num(fd, "cap");
+  if (value === null || value <= 0) throw new Error("ເພດານຕ້ອງເປັນຕົວເລກຫຼາຍກວ່າ 0 (ກີບ)");
+  await prisma.appSetting.upsert({
+    where: { key: BOOST_CAP_KEY },
+    create: { key: BOOST_CAP_KEY, value: String(Math.round(value)) },
+    update: { value: String(Math.round(value)) },
+  });
+  await recordAudit("live.boost.cap", null, `${Math.round(value)} ກີບ`);
+  revalidateLive(sessionId);
+}
+
+export async function createBoostAction(
+  sessionId: string,
+  _prev: string | null,
+  fd: FormData,
+): Promise<string | null> {
+  await requireSession();
+  try {
+    const gender = str(fd, "gender");
+    const user = await currentUser();
+    await createLiveBoost(
+      sessionId,
+      {
+        adAccountId: reqStr(fd, "adAccountId", "ບັນຊີໂຄສະນາ"),
+        budget: num(fd, "budget") ?? 0,
+        hours: int0(fd, "hours"),
+        ageMin: int0(fd, "ageMin"),
+        ageMax: int0(fd, "ageMax"),
+        gender: gender === "male" || gender === "female" ? gender : "all",
+      },
+      user?.displayName ?? null,
+    );
+    await recordAudit("live.boost", sessionId, `${num(fd, "budget")} · ${int0(fd, "hours")} ຊົ່ວໂມງ`);
+    revalidateLive(sessionId);
+    return "ສ້າງແລ້ວ — ຢຸດໄວ້ຢູ່ ກວດງົບ/ກຸ່ມເປົ້າໝາຍ ແລ້ວກົດ “ຍິງ”";
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+export async function runBoostAction(
+  boostId: string,
+  running: boolean,
+  _prev: string | null,
+): Promise<string | null> {
+  await requireSession();
+  try {
+    await setLiveBoostRunning(boostId, running);
+    const boost = await prisma.liveBoost.findUnique({ where: { id: boostId }, select: { sessionId: true } });
+    await recordAudit("live.boost.status", boostId, running ? "ACTIVE" : "PAUSED");
+    revalidateLive(boost?.sessionId);
+    return running ? "ຍິງແລ້ວ — Facebook ອາດກວດໂຄສະນາກ່ອນ 5–30 ນາທີ" : "ຢຸດແລ້ວ";
+  } catch (error) {
+    return explainFbError(error);
+  }
+}
+
+export async function refreshBoostAction(boostId: string) {
+  await requireSession();
+  await refreshLiveBoost(boostId);
+  const boost = await prisma.liveBoost.findUnique({ where: { id: boostId }, select: { sessionId: true } });
+  revalidateLive(boost?.sessionId);
+}
+
+// ------------------------------------------------------------ ຍອດຄົນເບິ່ງ
+
+export async function refreshLiveStatsAction(sessionId: string, _prev: string | null): Promise<string | null> {
+  await requireSession();
+  const result = await pullLiveStats(sessionId, { force: true });
+  revalidateLive(sessionId);
+  revalidatePath(`/live/${sessionId}/report`);
+  return result.error ?? (result.saved ? "ອັບເດດຍອດຄົນເບິ່ງແລ້ວ" : null);
 }

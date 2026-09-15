@@ -35,6 +35,15 @@ export default async function LiveListPage() {
   });
   const saleBy = new Map(sales.map((s) => [s.liveSessionId, s._sum.saleAmount ?? 0]));
 
+  // ຄົນເບິ່ງຫຼ້າສຸດຂອງແຕ່ລະ live (ຈາກ Facebook) — ຈຸດສຸດທ້າຍທີ່ມີຄ່າ
+  const stats = await prisma.liveStat.findMany({
+    where: { sessionId: { in: lives.map((l) => l.id) }, viewers: { not: null } },
+    orderBy: { at: "desc" },
+    distinct: ["sessionId"],
+    select: { sessionId: true, viewers: true },
+  });
+  const viewersBy = new Map(stats.map((s) => [s.sessionId, s.viewers]));
+
   return (
     <>
       <PageHeader
@@ -57,6 +66,7 @@ export default async function LiveListPage() {
                   <tr>
                     <th>ວັນທີ່ / ຮອບ</th>
                     <th>ເພຈ</th>
+                    <th className="num">ຄົນເບິ່ງ</th>
                     <th className="num">ສິນຄ້າ</th>
                     <th className="num">CF</th>
                     <th className="num">ບິນ</th>
@@ -77,6 +87,7 @@ export default async function LiveListPage() {
                         </div>
                       </td>
                       <td className="text-xs">{live.page.name}</td>
+                      <td className="num">{viewersBy.has(live.id) ? formatInt(viewersBy.get(live.id)) : "—"}</td>
                       <td className="num">{formatInt(live._count.items)}</td>
                       <td className="num">{formatInt(live._count.claims)}</td>
                       <td className="num">{formatInt(live._count.orders)}</td>

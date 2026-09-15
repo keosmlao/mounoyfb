@@ -115,6 +115,7 @@ model AdAccount {
   campaigns Campaign[]
   insights  Insight[]
   segments  SegmentInsight[]
+  boosts    LiveBoost[]
 
   @@index([status])
 }
@@ -522,6 +523,8 @@ model LiveSession {
   claims   LiveClaim[]
   orders   Order[]
   comments LiveComment[]
+  boosts   LiveBoost[]
+  stats    LiveStat[]
 
   @@index([status])
   @@index([date])
@@ -566,6 +569,69 @@ model LiveComment {
 
   @@index([sessionId, commentedAt])
   @@index([parentFbId])
+}
+
+/// ການ boost live 1 ເທື່ອ = campaign + ad set + ad 1 ຊຸດຢູ່ Facebook.
+/// **ໃຊ້ເງິນຈິງ** — ສ້າງໄວ້ສະຖານະຢຸດສະເໝີ ຄົນກົດຍິງເອງ (ເບິ່ງ `live-boost-server.ts`)
+model LiveBoost {
+  id              String    @id @default(cuid())
+  sessionId       String
+  adAccountId     String
+  fbCampaignId    String?   @unique
+  fbAdSetId       String?
+  fbCreativeId    String?
+  fbAdId          String?
+  /// ງົບລວມ — ສະກຸນຂອງບັນຊີໂຄສະນາ (`currency`) ບໍ່ແມ່ນກີບ
+  budget          Float
+  currency        String
+  /// ງົບເປັນກີບຕອນສ້າງ — ຄ່າທີ່ໃຊ້ທຽບເພດານ
+  budgetLak       Float
+  hours           Int
+  ageMin          Int
+  ageMax          Int
+  gender          String
+  endsAt          DateTime
+  /// ສະຖານະທີ່ເຮົາສັ່ງ: PAUSED | ACTIVE
+  status          String    @default("PAUSED")
+  /// ສະຖານະຈິງຈາກ Facebook (PENDING_REVIEW, ACTIVE, DISAPPROVED, …)
+  effectiveStatus String?
+  reviewNote      String?
+  /// ຜົນຈາກ Facebook — ສະກຸນຂອງບັນຊີ
+  spend           Float?
+  reach           Int?
+  impressions     Int?
+  checkedAt       DateTime?
+  error           String?
+  createdBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  session   LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  adAccount AdAccount   @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+/// ຍອດຄົນເບິ່ງຂອງວິດີໂອ live ຕາມເວລາ (ຈາກ video insights ຂອງ Facebook).
+/// ເກັບເປັນຈຸດໆ ຈຶ່ງເຫັນວ່າຍອດເພີ່ມຊ່ວງໃດ — ຄ່າທຸກອັນເປັນ**ຍອດສະສົມ**ນັບແຕ່ເລີ່ມ
+model LiveStat {
+  id           String   @id @default(cuid())
+  sessionId    String
+  at           DateTime @default(now())
+  /// ຈຳນວນເທື່ອທີ່ຖືກເບິ່ງ (3 ວິນາທີຂຶ້ນໄປ)
+  views        Int?
+  /// ຈຳນວນຄົນທີ່ເບິ່ງ (ບໍ່ນັບຊ້ຳ)
+  viewers      Int?
+  /// ເວລາເບິ່ງສະເລ່ຍ (ms)
+  avgWatchMs   Int?
+  /// ເວລາເບິ່ງລວມທຸກຄົນ (ms)
+  totalWatchMs Float?
+  impressions  Int?
+  reactions    Int?
+
+  session LiveSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, at])
 }
 
 /// ສິນຄ້າໃນ live ນັ້ນ — ລະຫັດຕັ້ງໃໝ່ທຸກຮອບ

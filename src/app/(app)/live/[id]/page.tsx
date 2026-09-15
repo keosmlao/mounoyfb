@@ -9,6 +9,7 @@ import { ProductThumb } from "@/components/ProductThumb";
 import { LoadMore } from "@/components/LoadMore";
 import { ActionMessageForm } from "@/components/ActionMessageForm";
 import { COMMENT_PAGE_SIZE, CommentsPanel, commentTab } from "./CommentsPanel";
+import { BoostPanel } from "./BoostPanel";
 import {
   assignClaim,
   billLive,
@@ -108,6 +109,11 @@ export default async function LiveBoardPage({
   }
 
   const isLive = session.status === "LIVE";
+  const latestStat = await prisma.liveStat.findFirst({
+    where: { sessionId: session.id, viewers: { not: null } },
+    orderBy: { at: "desc" },
+    select: { viewers: true, at: true },
+  });
 
   return (
     <>
@@ -194,7 +200,12 @@ export default async function LiveBoardPage({
         </Card>
       ) : null}
 
-      <StatStrip cols={5}>
+      <StatStrip cols={6}>
+        <StatTile
+          label="ຄົນເບິ່ງ"
+          value={latestStat?.viewers != null ? formatInt(latestStat.viewers) : "—"}
+          hint={latestStat ? `Facebook · ${formatTimeLao(latestStat.at)}` : "ດຶງທຸກ 5 ນາທີລະຫວ່າງ live"}
+        />
         <StatTile label="CF ທັງໝົດ" value={formatInt(claims.length)} hint={`ອ່ານ comment ${formatInt(session.commentsSeen)}`} />
         <StatTile label="ຈອງໄດ້" value={`${formatInt(reservedQty)} ຊິ້ນ`} />
         <StatTile label="ລໍຄິວ" value={`${formatInt(waitingQty)} ຊິ້ນ`} hint="ໄດ້ຂອງເມື່ອມີຄົນຍົກເລີກ" />
@@ -514,6 +525,8 @@ export default async function LiveBoardPage({
               </div>
             </div>
           </Card>
+
+          <BoostPanel session={session} money={money} />
 
           {/* ------------------------------------------ ຂໍ້ມູນຮອບ */}
           <Card>
